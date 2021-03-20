@@ -1,0 +1,8 @@
+spotify_sync_env3/
+env*
+.env
+!.env.example
+*.csv
+.ipynb_checkpoints/
+.DS_Store
+.cache-*
