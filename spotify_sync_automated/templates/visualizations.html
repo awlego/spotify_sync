@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Visualizations - Spotify Sync{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4">Music Listening Visualizations</h1>
+
+<!-- Controls -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form class="row g-3" id="controls-form">
+                    <div class="col-md-3">
+                        <label for="time-period" class="form-label">Time Period</label>
+                        <select class="form-select" id="time-period">
+                            <option value="7">Last 7 days</option>
+                            <option value="30" selected>Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="365">Last year</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="year-select" class="form-label">Year (for calendar)</label>
+                        <select class="form-select" id="year-select">
+                            <option value="2024">2024</option>
+                            <option value="2023" selected>2023</option>
+                            <option value="2022">2022</option>
+                            <option value="2021">2021</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="artist-filter" class="form-label">Filter by Artist</label>
+                        <input type="text" class="form-control" id="artist-filter" placeholder="Leave empty for all">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" class="btn btn-spotify form-control" onclick="updateVisualizations()">
+                            Update Charts
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Visualizations Grid -->
+<div class="row">
+    <!-- Top Tracks -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Top Tracks</h5>
+                <div id="top-tracks-chart" style="height: 600px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Artists -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Top Artists</h5>
+                <div id="top-artists-chart" style="height: 600px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Listening Calendar -->
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening Calendar</h5>
+                <div id="calendar-heatmap" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Listening Patterns -->
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening Patterns</h5>
+                <div id="listening-patterns" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Diversity Score -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Listening Diversity</h5>
+                <div id="diversity-gauges" style="height: 300px;"></div>
+                <div class="mt-3">
+                    <p class="mb-1">
+                        <strong>Top Artist:</strong> <span id="top-artist-percentage">-</span>% of plays
+                    </p>
+                    <p class="mb-1">
+                        <strong>Unique Artists:</strong> <span id="unique-artists-count">-</span>
+                    </p>
+                    <p class="mb-0">
+                        <strong>Unique Tracks:</strong> <span id="unique-tracks-count">-</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Music Discovery -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Recent Artist Discoveries</h5>
+                <div id="discovery-timeline" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load visualizations on page load
+    $(document).ready(() => {
+        updateVisualizations();
+    });
+    
+    function updateVisualizations() {
+        const days = $('#time-period').val();
+        const year = $('#year-select').val();
+        const artist = $('#artist-filter').val();
+        
+        // Load all visualizations
+        loadTopTracks(days);
+        loadTopArtists(days);
+        loadCalendarHeatmap(year, artist);
+        loadListeningPatterns(days);
+        loadDiversityScore(days);
+        loadDiscoveryTimeline(days);
+    }
+    
+    function loadTopTracks(days) {
+        fetch(`/api/analytics/top-tracks?days=${days}&limit=20`)
+            .then(response => response.json())
+            .then(data => {
+                const traces = [{
+                    type: 'bar',
+                    x: data.map(d => d.play_count),
+                    y: data.map(d => `${d.track_name}<br><sub>${d.artist_name}</sub>`),
+                    orientation: 'h',
+                    marker: {
+                        color: '#1db954'
+                    },
+                    text: data.map(d => d.play_count),
+                    textposition: 'auto',
+                    hovertemplate: '%{y}<br>Plays: %{x}<extra></extra>'
+                }];
+                
+                const layout = {
+                    title: `Top 20 Tracks (Last ${days} days)`,
+                    xaxis: { title: 'Play Count' },
+                    yaxis: { 
+                        autorange: 'reversed',
+                        tickfont: { size: 10 }
+                    },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    margin: { l: 200 }
+                };
+                
+                Plotly.newPlot('top-tracks-chart', traces, layout, {responsive: true});
+            });
+    }
+    
+    function loadTopArtists(days) {
+        fetch(`/api/analytics/top-artists?days=${days}&limit=20`)
+            .then(response => response.json())
+            .then(data => {
+                const traces = [{
+                    type: 'bar',
+                    x: data.map(d => d.play_count),
+                    y: data.map(d => d.artist_name),
+                    orientation: 'h',
+                    marker: {
+                        color: '#1ed760'
+                    },
+                    text: data.map(d => d.play_count),
+                    textposition: 'auto'
+                }];
+                
+                const layout = {
+                    title: `Top 20 Artists (Last ${days} days)`,
+                    xaxis: { title: 'Play Count' },
+                    yaxis: { autorange: 'reversed' },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    margin: { l: 150 }
+                };
+                
+                Plotly.newPlot('top-artists-chart', traces, layout, {responsive: true});
+            });
+    }
+    
+    function loadCalendarHeatmap(year, artist) {
+        let url = `/api/analytics/calendar?year=${year}`;
+        if (artist) url += `&artist=${encodeURIComponent(artist)}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                // Convert data for calendar heatmap
+                const dates = data.map(d => d.date);
+                const values = data.map(d => d.plays);
+                
+                const traces = [{
+                    type: 'heatmap',
+                    x: dates,
+                    y: [0],
+                    z: [values],
+                    colorscale: 'Viridis',
+                    showscale: true
+                }];
+                
+                const layout = {
+                    title: `Listening Activity - ${year}` + (artist ? ` (${artist})` : ''),
+                    xaxis: {
+                        type: 'date',
+                        tickformat: '%b'
+                    },
+                    yaxis: {
+                        visible: false
+                    },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' }
+                };
+                
+                Plotly.newPlot('calendar-heatmap', traces, layout, {responsive: true});
+            });
+    }
+    
+    function loadListeningPatterns(days) {
+        fetch(`/api/analytics/listening-patterns?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                // Hourly data
+                const hours = Object.keys(data.hourly).map(Number).sort((a, b) => a - b);
+                const hourlyValues = hours.map(h => data.hourly[h]);
+                
+                // Weekday data
+                const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                const weekdayValues = weekdays.map(d => data.weekday[d] || 0);
+                
+                const traces = [
+                    {
+                        x: hours,
+                        y: hourlyValues,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: 'By Hour',
+                        line: { color: '#1db954' },
+                        xaxis: 'x',
+                        yaxis: 'y'
+                    },
+                    {
+                        x: weekdays,
+                        y: weekdayValues,
+                        type: 'bar',
+                        name: 'By Weekday',
+                        marker: { color: '#1ed760' },
+                        xaxis: 'x2',
+                        yaxis: 'y2'
+                    }
+                ];
+                
+                const layout = {
+                    title: 'Listening Patterns',
+                    grid: { rows: 1, columns: 2, pattern: 'independent' },
+                    xaxis: { title: 'Hour of Day', domain: [0, 0.45] },
+                    yaxis: { title: 'Plays' },
+                    xaxis2: { title: 'Day of Week', domain: [0.55, 1] },
+                    yaxis2: { title: 'Plays', anchor: 'x2' },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' },
+                    showlegend: false
+                };
+                
+                Plotly.newPlot('listening-patterns', traces, layout, {responsive: true});
+            });
+    }
+    
+    function loadDiversityScore(days) {
+        fetch(`/api/analytics/diversity?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update text stats
+                $('#top-artist-percentage').text(data.top_artist_percentage);
+                $('#unique-artists-count').text(data.unique_artists);
+                $('#unique-tracks-count').text(data.unique_tracks);
+                
+                // Create gauge charts
+                const traces = [
+                    {
+                        type: 'indicator',
+                        mode: 'gauge+number',
+                        value: data.artist_diversity * 100,
+                        title: { text: 'Artist Diversity %' },
+                        gauge: {
+                            axis: { range: [null, 100] },
+                            bar: { color: '#1db954' },
+                            steps: [
+                                { range: [0, 25], color: '#333' },
+                                { range: [25, 50], color: '#555' }
+                            ]
+                        },
+                        domain: { x: [0, 0.45], y: [0, 1] }
+                    },
+                    {
+                        type: 'indicator',
+                        mode: 'gauge+number',
+                        value: data.track_diversity * 100,
+                        title: { text: 'Track Diversity %' },
+                        gauge: {
+                            axis: { range: [null, 100] },
+                            bar: { color: '#1ed760' },
+                            steps: [
+                                { range: [0, 25], color: '#333' },
+                                { range: [25, 50], color: '#555' }
+                            ]
+                        },
+                        domain: { x: [0.55, 1], y: [0, 1] }
+                    }
+                ];
+                
+                const layout = {
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' }
+                };
+                
+                Plotly.newPlot('diversity-gauges', traces, layout, {responsive: true});
+            });
+    }
+    
+    function loadDiscoveryTimeline(days) {
+        fetch(`/api/analytics/discovery?days=${days}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.length === 0) {
+                    $('#discovery-timeline').html('<p class="text-center text-muted mt-5">No new artist discoveries in this period</p>');
+                    return;
+                }
+                
+                const traces = [{
+                    type: 'scatter',
+                    mode: 'markers+text',
+                    x: data.map(d => d.discovered_date),
+                    y: data.map(d => d.total_plays_since),
+                    text: data.map(d => d.artist_name),
+                    textposition: 'top center',
+                    marker: {
+                        size: data.map(d => Math.min(d.total_plays_since / 2, 30)),
+                        color: data.map(d => d.total_plays_since),
+                        colorscale: 'Viridis',
+                        showscale: true
+                    },
+                    hovertemplate: '<b>%{text}</b><br>Discovered: %{x}<br>Plays since: %{y}<extra></extra>'
+                }];
+                
+                const layout = {
+                    title: 'Artist Discovery Timeline',
+                    xaxis: { title: 'Discovery Date' },
+                    yaxis: { title: 'Total Plays Since Discovery' },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    font: { color: '#fff' }
+                };
+                
+                Plotly.newPlot('discovery-timeline', traces, layout, {responsive: true});
+            });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Spotify Sync{% endblock %}
+
+{% block content %}
+<div id="alerts"></div>
+
+<div class="row">
+    <!-- Status Overview -->
+    <div class="col-md-12 mb-4">
+        <h1 class="h3 mb-4">System Status</h1>
+        <div class="row">
+            <!-- Spotify Auth Status -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Spotify Auth</h5>
+                        <p class="card-text">
+                            <span id="spotify-auth-status"></span>
+                        </p>
+                        <a href="/auth/spotify" class="btn btn-sm btn-spotify" id="spotify-auth-btn">
+                            Connect Spotify
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Last.fm Sync Status -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Last.fm Sync</h5>
+                        <p class="card-text">
+                            <span class="status-indicator" id="lastfm-status-indicator"></span>
+                            <span id="lastfm-status"></span>
+                        </p>
+                        <small class="text-muted" id="lastfm-last-sync"></small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Spotify Sync Status -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Spotify Sync</h5>
+                        <p class="card-text">
+                            <span class="status-indicator" id="spotify-status-indicator"></span>
+                            <span id="spotify-status"></span>
+                        </p>
+                        <small class="text-muted" id="spotify-last-sync"></small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Scheduler Status -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Scheduler</h5>
+                        <p class="card-text">
+                            <span class="status-indicator status-success"></span>
+                            Active
+                        </p>
+                        <small class="text-muted" id="next-sync"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Stats -->
+    <div class="col-md-12 mb-4">
+        <h2 class="h3 mb-4">Quick Stats</h2>
+        <div class="row" id="quick-stats">
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value" id="total-lastfm-tracks">-</div>
+                    <div class="metric-label">Last.fm Tracks Synced</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value" id="total-spotify-tracks">-</div>
+                    <div class="metric-label">Spotify Tracks Synced</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value" id="active-playlists">-</div>
+                    <div class="metric-label">Active Playlists</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="metric-value" id="scheduled-jobs">-</div>
+                    <div class="metric-label">Scheduled Jobs</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Playlists -->
+    <div class="col-md-12 mb-4">
+        <h2 class="h3 mb-4">Managed Playlists</h2>
+        <div class="row" id="playlists-container">
+            <!-- Playlist cards will be inserted here -->
+        </div>
+    </div>
+    
+    <!-- Scheduled Jobs -->
+    <div class="col-md-12">
+        <h2 class="h3 mb-4">Scheduled Jobs</h2>
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-dark table-striped">
+                    <thead>
+                        <tr>
+                            <th>Job Name</th>
+                            <th>Trigger</th>
+                            <th>Next Run</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobs-table">
+                        <!-- Jobs will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load status on page load
+    $(document).ready(() => {
+        loadStatus();
+        // Refresh status every 30 seconds
+        setInterval(loadStatus, 30000);
+    });
+    
+    function loadStatus() {
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                updateSyncStatus(data.sync_status);
+                updatePlaylistStats(data.playlist_stats);
+                updateJobsTable(data.scheduler_jobs);
+                updateAuthStatus(data.spotify_authenticated);
+            });
+    }
+    
+    function updateSyncStatus(syncStatus) {
+        // Last.fm status
+        const lastfm = syncStatus.lastfm;
+        $('#lastfm-status').text(lastfm.status);
+        $('#lastfm-status-indicator').removeClass().addClass('status-indicator status-' + lastfm.status);
+        $('#lastfm-last-sync').text('Last sync: ' + formatDate(lastfm.last_sync));
+        $('#total-lastfm-tracks').text(formatNumber(lastfm.total_tracks_synced));
+        
+        // Spotify status
+        const spotify = syncStatus.spotify;
+        $('#spotify-status').text(spotify.status);
+        $('#spotify-status-indicator').removeClass().addClass('status-indicator status-' + spotify.status);
+        $('#spotify-last-sync').text('Last sync: ' + formatDate(spotify.last_sync));
+        $('#total-spotify-tracks').text(formatNumber(spotify.total_tracks_synced));
+    }
+    
+    function updatePlaylistStats(playlists) {
+        $('#active-playlists').text(Object.keys(playlists).length);
+        
+        const container = $('#playlists-container');
+        container.empty();
+        
+        for (const [type, playlist] of Object.entries(playlists)) {
+            const card = `
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">${playlist.name}</h5>
+                            <p class="card-text">
+                                <strong>Type:</strong> ${type}<br>
+                                <strong>Tracks:</strong> ${playlist.track_count} / ${playlist.configured_size}<br>
+                                <strong>Last Updated:</strong> ${formatDate(playlist.last_updated)}
+                            </p>
+                            <button class="btn btn-sm btn-spotify" onclick="updatePlaylist('${type}')">
+                                Update Now
+                            </button>
+                            <a href="https://open.spotify.com/playlist/${playlist.spotify_id}" 
+                               target="_blank" class="btn btn-sm btn-outline-light">
+                                Open in Spotify
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.append(card);
+        }
+    }
+    
+    function updateJobsTable(jobs) {
+        $('#scheduled-jobs').text(jobs.length);
+        
+        const tbody = $('#jobs-table');
+        tbody.empty();
+        
+        jobs.forEach(job => {
+            const row = `
+                <tr>
+                    <td>${job.name}</td>
+                    <td>${job.trigger}</td>
+                    <td>${formatDate(job.next_run)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-light" onclick="pauseJob('${job.id}')">
+                            <i class="bi bi-pause"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+        
+        if (jobs.length > 0) {
+            $('#next-sync').text('Next sync: ' + formatDate(jobs[0].next_run));
+        }
+    }
+    
+    function updateAuthStatus(authenticated) {
+        if (authenticated) {
+            $('#spotify-auth-status').html('<span class="text-success">Connected</span>');
+            $('#spotify-auth-btn').text('Reconnect').removeClass('btn-spotify').addClass('btn-outline-light');
+        } else {
+            $('#spotify-auth-status').html('<span class="text-danger">Not Connected</span>');
+            $('#spotify-auth-btn').text('Connect Spotify').removeClass('btn-outline-light').addClass('btn-spotify');
+        }
+    }
+    
+    function updatePlaylist(type) {
+        fetch(`/api/playlists/update/${type}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`${type} playlist updated successfully!`, 'success');
+                    loadStatus();
+                } else {
+                    showAlert(`Failed to update ${type} playlist: ${data.error}`, 'danger');
+                }
+            });
+    }
+    
+    function pauseJob(jobId) {
+        // TODO: Implement job pause/resume
+        showAlert('Job control not yet implemented', 'warning');
+    }
+</script>
+{% endblock %}
