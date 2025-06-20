@@ -7,7 +7,7 @@ import json
 
 from .models import (
     Artist, Album, Track, PlayHistory, Playlist, PlaylistTrack,
-    SyncStatus, UserPreference, get_engine, init_database, get_session
+    SyncStatus, SyncProgress, UserPreference, get_engine, init_database, get_session
 )
 from .config import get_config
 
@@ -89,7 +89,7 @@ class DatabaseManager:
     
     # Play history operations
     def add_play(self, session: Session, track: Track, played_at: datetime, 
-                 source: str = 'lastfm') -> Optional[PlayHistory]:
+                 source: str = 'lastfm', lastfm_url: Optional[str] = None) -> Optional[PlayHistory]:
         """Add a play to history if it doesn't already exist"""
         existing = session.query(PlayHistory).filter_by(
             track_id=track.id,
@@ -101,7 +101,8 @@ class DatabaseManager:
                 track_id=track.id,
                 artist_id=track.artist_id,
                 played_at=played_at,
-                source=source
+                source=source,
+                lastfm_url=lastfm_url
             )
             session.add(play)
             return play
@@ -212,6 +213,39 @@ class DatabaseManager:
             sync_status.tracks_synced += tracks_synced
         elif status == 'error':
             sync_status.error_message = error_message
+    
+    # Progress tracking operations
+    def get_sync_progress(self, session: Session, sync_type: str) -> SyncProgress:
+        """Get or create sync progress tracker"""
+        progress = session.query(SyncProgress).filter_by(sync_type=sync_type).first()
+        if not progress:
+            progress = SyncProgress(sync_type=sync_type)
+            session.add(progress)
+            session.flush()
+        return progress
+    
+    def update_sync_progress(self, session: Session, sync_type: str, **kwargs):
+        """Update sync progress with provided fields"""
+        progress = self.get_sync_progress(session, sync_type)
+        for key, value in kwargs.items():
+            if hasattr(progress, key):
+                setattr(progress, key, value)
+        progress.updated_at = datetime.utcnow()
+    
+    def reset_sync_progress(self, session: Session, sync_type: str):
+        """Reset sync progress for a fresh start"""
+        progress = self.get_sync_progress(session, sync_type)
+        progress.status = 'idle'
+        progress.current_chunk = None
+        progress.last_timestamp = None
+        progress.last_page = 1
+        progress.total_chunks_completed = 0
+        progress.total_tracks_synced = 0
+        progress.api_calls_made = 0
+        progress.error_count = 0
+        progress.last_error = None
+        progress.started_at = None
+        progress.updated_at = datetime.utcnow()
     
     # Analytics queries
     def get_top_artists(self, session: Session, days: Optional[int] = None, 

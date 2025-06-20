@@ -69,6 +69,7 @@ class PlayHistory(Base):
     artist_id = Column(Integer, ForeignKey('artists.id'), nullable=False)
     played_at = Column(DateTime, nullable=False)
     source = Column(String, default='lastfm')  # 'lastfm' or 'spotify'
+    lastfm_url = Column(String)  # Store Last.fm URL as unique identifier
     
     # Relationships
     track = relationship("Track", back_populates="plays")
@@ -78,6 +79,7 @@ class PlayHistory(Base):
         UniqueConstraint('track_id', 'played_at', name='_track_time_uc'),
         Index('idx_played_at', 'played_at'),
         Index('idx_track_played', 'track_id', 'played_at'),
+        Index('idx_lastfm_url', 'lastfm_url'),
     )
 
 
@@ -124,6 +126,24 @@ class SyncStatus(Base):
     status = Column(String, default='idle')  # 'idle', 'running', 'error'
     error_message = Column(String)
     tracks_synced = Column(Integer, default=0)
+
+
+class SyncProgress(Base):
+    __tablename__ = 'sync_progress'
+    
+    id = Column(Integer, primary_key=True)
+    sync_type = Column(String, nullable=False, unique=True)  # 'lastfm_full', 'lastfm_incremental'
+    status = Column(String, default='idle')  # 'idle', 'running', 'completed', 'error'
+    current_chunk = Column(String)  # e.g., '2019-01' for monthly chunks
+    last_timestamp = Column(Integer)  # Unix timestamp of last processed track
+    last_page = Column(Integer, default=1)
+    total_chunks_completed = Column(Integer, default=0)
+    total_tracks_synced = Column(Integer, default=0)
+    api_calls_made = Column(Integer, default=0)
+    started_at = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    error_count = Column(Integer, default=0)
+    last_error = Column(String)
 
 
 class UserPreference(Base):
