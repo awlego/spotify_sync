@@ -1,0 +1,28 @@
+database:
+  backup_path: backups/
+  path: data/db/spotify_sync.db
+lastfm:
+  api_key: ${LASTFM_API_KEY}
+  api_secret: ${LASTFM_API_SECRET}
+  username: ${LASTFM_USERNAME}
+playlists:
+  binged_songs:
+    id: ${BINGED_SONGS_ID}
+    min_daily_plays: 3
+    size: 25
+  most_listened:
+    id: ${MOST_LISTENED_TO_ID}
+    size: 50
+  recent_favorites:
+    id: ${RECENT_FAVORITES_ID}
+    size: 25
+    timeframe_days: 30
+spotify:
+  client_id: ${SPOTIPY_CLIENT_ID}
+  client_secret: ${SPOTIPY_CLIENT_SECRET}
+  redirect_uri: http://localhost:6006/callback
+  username: ${SPOTIFY_USERNAME}
+sync:
+  batch_size: 50
+  history_days: 30
+  interval_minutes: 5

@@ -1,0 +1,1 @@
+"""Sync Service - Backend for Last.fm to Spotify syncing"""

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your {{ year }} Wrapped - Spotify Sync</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .screen {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px 20px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+        
+        .screen.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .stat-number {
+            font-size: 5em;
+            font-weight: bold;
+            margin: 20px 0;
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            font-size: 1.5em;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+        
+        .top-list {
+            text-align: left;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            margin: 20px 0;
+        }
+        
+        .top-item {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }
+        
+        .top-item:hover {
+            transform: translateX(10px);
+        }
+        
+        .rank {
+            font-size: 2em;
+            font-weight: bold;
+            margin-right: 20px;
+            opacity: 0.7;
+        }
+        
+        .item-info {
+            flex: 1;
+        }
+        
+        .item-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .item-subtitle {
+            opacity: 0.8;
+        }
+        
+        .play-count {
+            font-weight: bold;
+            opacity: 0.9;
+        }
+        
+        .personality-card {
+            background: rgba(255,255,255,0.2);
+            border-radius: 30px;
+            padding: 40px;
+            margin: 30px 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .personality-type {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        
+        .personality-desc {
+            font-size: 1.3em;
+            opacity: 0.9;
+        }
+        
+        .nav-buttons {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+        
+        .nav-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 30px;
+            font-size: 1.1em;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        
+        .nav-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.05);
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .calendar-viz {
+            width: 100%;
+            height: 400px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .share-button {
+            background: #1db954;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: all 0.3s;
+        }
+        
+        .share-button:hover {
+            background: #1ed760;
+            transform: scale(1.05);
+        }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+    
+    <div id="content" style="display: none;">
+        <!-- Screen 1: Welcome -->
+        <div class="screen active" id="screen-1">
+            <div class="container">
+                <h1>Your {{ year }} Wrapped</h1>
+                <p class="stat-label">Let's look back at your year in music</p>
+                <div class="share-button" onclick="startJourney()">Start Your Journey</div>
+            </div>
+        </div>
+        
+        <!-- Screen 2: Total Stats -->
+        <div class="screen" id="screen-2">
+            <div class="container">
+                <h1>You really love music!</h1>
+                <div class="stat-number" id="total-minutes">-</div>
+                <p class="stat-label">minutes of listening</p>
+                <p style="font-size: 1.2em; opacity: 0.8;">That's <span id="hours-equivalent">-</span> hours!</p>
+            </div>
+        </div>
+        
+        <!-- Screen 3: Unique Tracks -->
+        <div class="screen" id="screen-3">
+            <div class="container">
+                <h1>Musical Explorer</h1>
+                <div class="stat-number" id="unique-tracks">-</div>
+                <p class="stat-label">different songs</p>
+                <div class="stat-number" id="unique-artists" style="font-size: 3em;">-</div>
+                <p class="stat-label">different artists</p>
+            </div>
+        </div>
+        
+        <!-- Screen 4: Top Tracks -->
+        <div class="screen" id="screen-4">
+            <div class="container">
+                <h1>Your Top Tracks</h1>
+                <div class="top-list" id="top-tracks-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Screen 5: Top Artists -->
+        <div class="screen" id="screen-5">
+            <div class="container">
+                <h1>Your Top Artists</h1>
+                <div class="top-list" id="top-artists-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Screen 6: Listening Personality -->
+        <div class="screen" id="screen-6">
+            <div class="container">
+                <h1>Your Listening Personality</h1>
+                <div class="personality-card">
+                    <div class="personality-type" id="personality-type">-</div>
+                    <p class="personality-desc" id="personality-desc">-</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Screen 7: Calendar -->
+        <div class="screen" id="screen-7">
+            <div class="container">
+                <h1>Your Year in Pixels</h1>
+                <p class="stat-label">Every day you listened</p>
+                <div id="calendar-viz" class="calendar-viz"></div>
+            </div>
+        </div>
+        
+        <!-- Screen 8: Thank You -->
+        <div class="screen" id="screen-8">
+            <div class="container">
+                <h1>Thanks for a great year!</h1>
+                <p class="stat-label">Here's to more music in {{ year + 1 }}</p>
+                <div class="share-button" onclick="shareWrapped()">Share Your Wrapped</div>
+                <br><br>
+                <a href="/explore" style="color: white; opacity: 0.8;">Explore More Stats →</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="nav-buttons" id="nav" style="display: none;">
+        <button class="nav-btn" onclick="previousScreen()">← Previous</button>
+        <button class="nav-btn" onclick="nextScreen()">Next →</button>
+    </div>
+    
+    <script>
+        let currentScreen = 1;
+        const totalScreens = 8;
+        let wrappedData = null;
+        
+        // Load wrapped data
+        async function loadWrappedData() {
+            try {
+                const response = await fetch('/api/wrapped/{{ year }}');
+                wrappedData = await response.json();
+                
+                if (wrappedData.error) {
+                    throw new Error(wrappedData.error);
+                }
+                
+                populateData();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                console.error('Failed to load wrapped data:', error);
+                alert('Failed to load your wrapped data. Please try again.');
+            }
+        }
+        
+        function populateData() {
+            // Total stats
+            document.getElementById('total-minutes').textContent = wrappedData.stats.total_minutes.toLocaleString();
+            document.getElementById('hours-equivalent').textContent = Math.round(wrappedData.stats.total_minutes / 60).toLocaleString();
+            
+            // Unique counts
+            document.getElementById('unique-tracks').textContent = wrappedData.stats.unique_tracks.toLocaleString();
+            document.getElementById('unique-artists').textContent = wrappedData.stats.unique_artists.toLocaleString();
+            
+            // Top tracks
+            const tracksHtml = wrappedData.stats.top_tracks.slice(0, 5).map((track, i) => `
+                <div class="top-item">
+                    <div class="rank">${i + 1}</div>
+                    <div class="item-info">
+                        <div class="item-title">${track.track_name}</div>
+                        <div class="item-subtitle">${track.artist_name}</div>
+                    </div>
+                    <div class="play-count">${track.play_count} plays</div>
+                </div>
+            `).join('');
+            document.getElementById('top-tracks-list').innerHTML = tracksHtml;
+            
+            // Top artists
+            const artistsHtml = wrappedData.stats.top_artists.slice(0, 5).map((artist, i) => `
+                <div class="top-item">
+                    <div class="rank">${i + 1}</div>
+                    <div class="item-info">
+                        <div class="item-title">${artist.artist_name}</div>
+                    </div>
+                    <div class="play-count">${artist.play_count} plays</div>
+                </div>
+            `).join('');
+            document.getElementById('top-artists-list').innerHTML = artistsHtml;
+            
+            // Personality
+            document.getElementById('personality-type').textContent = wrappedData.personality.type;
+            document.getElementById('personality-desc').textContent = wrappedData.personality.description;
+            
+            // Load calendar visualization
+            loadCalendarViz();
+        }
+        
+        async function loadCalendarViz() {
+            try {
+                const response = await fetch('/api/visualizations/calendar/{{ year }}');
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('calendar-viz', chart.data, chart.layout, {responsive: true});
+                }
+            } catch (error) {
+                console.error('Failed to load calendar:', error);
+            }
+        }
+        
+        function startJourney() {
+            document.getElementById('nav').style.display = 'flex';
+            nextScreen();
+        }
+        
+        function showScreen(n) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            setTimeout(() => {
+                document.getElementById(`screen-${n}`).classList.add('active');
+            }, 100);
+        }
+        
+        function nextScreen() {
+            if (currentScreen < totalScreens) {
+                currentScreen++;
+                showScreen(currentScreen);
+            }
+        }
+        
+        function previousScreen() {
+            if (currentScreen > 1) {
+                currentScreen--;
+                showScreen(currentScreen);
+            }
+        }
+        
+        function shareWrapped() {
+            // In a real app, this would generate a shareable image or link
+            alert('Sharing functionality coming soon!');
+        }
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextScreen();
+            if (e.key === 'ArrowLeft') previousScreen();
+        });
+        
+        // Load data on page load
+        loadWrappedData();
+    </script>
+</body>
+</html>

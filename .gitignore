@@ -1,8 +1,85 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+env3.10/
 spotify_sync_env3/
-env*
+
+# Virtual environments
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Environment variables
 .env
 !.env.example
-*.csv
-.ipynb_checkpoints/
-.DS_Store
+.env.local
+.env.*.local
+
+# Data files
+data/csv/*.csv
+data/cache/*
+data/db/*.db
+spotify_sync_automated/spotify_sync.db
+*.db
+
+# Spotify cache
 .cache-*
+.spotify_cache
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+data/csv/*
+!data/csv/.gitkeep
+data/cache/*
+!data/cache/.gitkeep
+backups/
+spotify_sync_automated/backups/
+*.backup
+
+# Personal data
+my_liked_songs.txt
+awlego*.csv
+daylio*.csv
