@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Spotify Wrapped Service - Main Entry Point
+Music Analytics Service - Main Entry Point
 
-This service provides Spotify Wrapped-style analytics and visualizations
-for your listening history.
+This service provides comprehensive analytics and visualizations
+for your personal music listening history.
 """
 
 import os
@@ -27,7 +27,7 @@ def setup_logging(log_level: str = "INFO"):
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>"
     )
     logger.add(
-        "../logs/wrapped_service_{time:YYYY-MM-DD}.log",
+        "../logs/analytics_service_{time:YYYY-MM-DD}.log",
         rotation="1 day",
         retention="30 days",
         level=log_level
@@ -35,7 +35,7 @@ def setup_logging(log_level: str = "INFO"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Spotify Wrapped Service')
+    parser = argparse.ArgumentParser(description='Music Analytics Service')
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
     parser.add_argument('--port', type=int, default=5002, help='Port to bind to')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
@@ -46,7 +46,7 @@ def main():
     os.makedirs('../logs', exist_ok=True)
     setup_logging(args.log_level)
     
-    logger.info("Starting Spotify Wrapped Service")
+    logger.info("Starting Music Analytics Service")
     
     # Load configuration
     config = get_config()
@@ -56,7 +56,7 @@ def main():
     app = create_app()
     
     # Run the app
-    logger.info(f"Starting wrapped service on {args.host}:{args.port}")
+    logger.info(f"Starting analytics service on {args.host}:{args.port}")
     app.run(
         host=args.host,
         port=args.port,

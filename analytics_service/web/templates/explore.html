@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Analytics - Personal Listening History</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1DB954 0%, #1ED760 100%);
+            padding: 60px 20px 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .controls {
+            background: #282828;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 40px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .control-group label {
+            font-size: 0.9em;
+            color: #b3b3b3;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        select, input[type="date"], input[type="number"] {
+            background: #121212;
+            color: #ffffff;
+            border: 1px solid #404040;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 1em;
+            min-width: 200px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #1DB954;
+        }
+        
+        .btn {
+            background: #1DB954;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .btn:hover {
+            background: #1ED760;
+            transform: scale(1.05);
+        }
+        
+        .viz-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .viz-card {
+            background: #282828;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .viz-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        
+        .viz-card.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .viz-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #1DB954;
+        }
+        
+        .viz-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+        
+        .viz-container.tall {
+            height: 600px;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(29, 185, 84, 0.3);
+            border-top-color: #1DB954;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: #282828;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            border-color: #1DB954;
+        }
+        
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #1DB954;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            color: #b3b3b3;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.9em;
+        }
+        
+        .error {
+            background: #ff4444;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .viz-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Music Analytics Dashboard</h1>
+        <p>Explore your personal listening history and discover patterns</p>
+    </div>
+    
+    <div class="container">
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label>Time Period</label>
+                <select id="period-select">
+                    <option value="all">All Time</option>
+                    <option value="year">Specific Year</option>
+                    <option value="last-90">Last 90 Days</option>
+                    <option value="last-30">Last 30 Days</option>
+                    <option value="last-7">Last 7 Days</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+            
+            <div class="control-group" id="year-group" style="display: none;">
+                <label>Year</label>
+                <select id="year-select">
+                    <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            
+            <div class="control-group" id="custom-dates" style="display: none;">
+                <label>Date Range</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="date" id="start-date">
+                    <input type="date" id="end-date">
+                </div>
+            </div>
+            
+            <button class="btn" onclick="refreshVisualizations()">Update</button>
+        </div>
+        
+        <!-- Quick Stats -->
+        <div class="stats-row" id="stats-row">
+            <div class="stat-card">
+                <div class="stat-number" id="total-plays">-</div>
+                <div class="stat-label">Total Plays</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="unique-tracks">-</div>
+                <div class="stat-label">Unique Tracks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="unique-artists">-</div>
+                <div class="stat-label">Unique Artists</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="listening-hours">-</div>
+                <div class="stat-label">Hours Listened</div>
+            </div>
+        </div>
+        
+        <!-- Visualizations -->
+        <div class="viz-grid">
+            <!-- Calendar Heatmap -->
+            <div class="viz-card full-width">
+                <h2 class="viz-title">Listening Calendar</h2>
+                <div class="viz-container tall" id="calendar-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Listening Clock -->
+            <div class="viz-card">
+                <h2 class="viz-title">Daily Listening Clock</h2>
+                <div class="viz-container" id="clock-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Weekly Patterns -->
+            <div class="viz-card">
+                <h2 class="viz-title">Weekly Patterns</h2>
+                <div class="viz-container" id="weekly-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Top Artists Stream -->
+            <div class="viz-card full-width">
+                <h2 class="viz-title">Artist Listening Trends</h2>
+                <div class="viz-container tall" id="stream-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Music Hierarchy -->
+            <div class="viz-card">
+                <h2 class="viz-title">Your Music Universe</h2>
+                <div class="viz-container tall" id="sunburst-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Timeline -->
+            <div class="viz-card">
+                <h2 class="viz-title">Listening Timeline</h2>
+                <div class="viz-container" id="timeline-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentYear = new Date().getFullYear();
+        let currentData = null;
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            populateYearSelect();
+            setupEventListeners();
+            refreshVisualizations();
+        });
+        
+        function populateYearSelect() {
+            const select = document.getElementById('year-select');
+            const currentYear = new Date().getFullYear();
+            
+            // Add years from 2015 to current year
+            for (let year = currentYear; year >= 2015; year--) {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                if (year === currentYear) option.selected = true;
+                select.appendChild(option);
+            }
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('period-select').addEventListener('change', (e) => {
+                const customDates = document.getElementById('custom-dates');
+                const yearGroup = document.getElementById('year-group');
+                
+                if (e.target.value === 'custom') {
+                    customDates.style.display = 'block';
+                    yearGroup.style.display = 'none';
+                } else if (e.target.value === 'year') {
+                    customDates.style.display = 'none';
+                    yearGroup.style.display = 'block';
+                } else {
+                    customDates.style.display = 'none';
+                    yearGroup.style.display = 'none';
+                }
+            });
+            
+            // Set default date range for custom dates
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setFullYear(startDate.getFullYear() - 1);
+            
+            document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
+            document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
+        }
+        
+        async function refreshVisualizations() {
+            const periodSelect = document.getElementById('period-select').value;
+            let params = {};
+            
+            // Determine time range based on selection
+            if (periodSelect === 'all') {
+                params.period = 'all';
+            } else if (periodSelect === 'year') {
+                params.period = 'year';
+                params.year = document.getElementById('year-select').value;
+            } else if (periodSelect === 'last-90') {
+                params.period = 'days';
+                params.days = 90;
+            } else if (periodSelect === 'last-30') {
+                params.period = 'days';
+                params.days = 30;
+            } else if (periodSelect === 'last-7') {
+                params.period = 'days';
+                params.days = 7;
+            } else if (periodSelect === 'custom') {
+                params.period = 'custom';
+                params.start_date = document.getElementById('start-date').value;
+                params.end_date = document.getElementById('end-date').value;
+            }
+            
+            try {
+                // Load data
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/analytics/data?${queryString}`);
+                if (!response.ok) throw new Error('Failed to load data');
+                
+                currentData = await response.json();
+                
+                // Update stats
+                updateStats(currentData.stats);
+                
+                // Load visualizations with params
+                await Promise.all([
+                    loadCalendarViz(params),
+                    loadClockViz(params),
+                    loadWeeklyPatterns(params),
+                    loadStreamGraph(params),
+                    loadSunburst(params),
+                    loadTimeline(params)
+                ]);
+                
+            } catch (error) {
+                console.error('Error loading visualizations:', error);
+                showError('Failed to load visualizations. Please try again.');
+            }
+        }
+        
+        function updateStats(stats) {
+            document.getElementById('total-plays').textContent = 
+                (stats.total_plays || 0).toLocaleString();
+            document.getElementById('unique-tracks').textContent = 
+                (stats.unique_tracks || 0).toLocaleString();
+            document.getElementById('unique-artists').textContent = 
+                (stats.unique_artists || 0).toLocaleString();
+            document.getElementById('listening-hours').textContent = 
+                Math.round((stats.total_minutes || 0) / 60).toLocaleString();
+        }
+        
+        async function loadCalendarViz(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/visualizations/calendar?${queryString}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('calendar-container', chart.data, chart.layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading calendar:', error);
+                document.getElementById('calendar-container').innerHTML = 
+                    '<div class="error">Failed to load calendar visualization</div>';
+            }
+        }
+        
+        async function loadClockViz(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/visualizations/listening-clock?${queryString}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('clock-container', chart.data, chart.layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading clock:', error);
+            }
+        }
+        
+        async function loadWeeklyPatterns(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/visualizations/weekly-patterns?${queryString}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('weekly-container', chart.data, chart.layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading weekly patterns:', error);
+            }
+        }
+        
+        async function loadStreamGraph(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/visualizations/artist-trends?${queryString}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('stream-container', chart.data, chart.layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading stream graph:', error);
+            }
+        }
+        
+        async function loadSunburst(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/visualizations/music-hierarchy?${queryString}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('sunburst-container', chart.data, chart.layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading sunburst:', error);
+            }
+        }
+        
+        async function loadTimeline(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/visualizations/timeline?${queryString}`);
+                const data = await response.json();
+                
+                if (data.chart) {
+                    const chart = JSON.parse(data.chart);
+                    Plotly.newPlot('timeline-container', chart.data, chart.layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading timeline:', error);
+            }
+        }
+        
+        function showError(message) {
+            // Show error in each container
+            const containers = document.querySelectorAll('.viz-container');
+            containers.forEach(container => {
+                container.innerHTML = `<div class="error">${message}</div>`;
+            });
+        }
+    </script>
+</body>
+</html>

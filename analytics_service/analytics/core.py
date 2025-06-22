@@ -24,7 +24,7 @@ class AnalyticsService:
                 PlayHistory.played_at,
                 Track.name,
                 Artist.name.label('artist_name')
-            ).join(Track).join(Artist)
+            ).select_from(PlayHistory).join(Track).join(Artist)
             
             if year:
                 query = query.filter(
@@ -330,7 +330,7 @@ class AnalyticsService:
     def get_total_listening_time(self, year: Optional[int] = None) -> int:
         """Get total listening time in minutes for a year"""
         with self.db.session_scope() as session:
-            query = session.query(Track).join(PlayHistory)
+            query = session.query(PlayHistory).join(Track)
             
             if year:
                 query = query.filter(
@@ -365,6 +365,45 @@ class AnalyticsService:
             
             return query.count()
     
+    def get_stats_for_period(self, start_date: Optional[datetime] = None, 
+                           end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Get comprehensive stats for a flexible time period"""
+        with self.db.session_scope() as session:
+            # Build base query
+            query = session.query(PlayHistory)
+            
+            if start_date:
+                query = query.filter(PlayHistory.played_at >= start_date)
+            if end_date:
+                query = query.filter(PlayHistory.played_at < end_date)
+            
+            # Total plays
+            total_plays = query.count()
+            
+            # Get unique tracks
+            track_query = query.distinct(PlayHistory.track_id)
+            unique_tracks = track_query.count()
+            
+            # Get unique artists
+            artist_query = query.join(Track).distinct(Track.artist_id)
+            unique_artists = artist_query.count()
+            
+            # Calculate total minutes (assuming avg 3 minutes per track)
+            total_minutes = total_plays * 3
+            
+            # Try to get more accurate duration if available
+            plays_with_duration = query.join(Track).filter(Track.duration_ms.isnot(None)).all()
+            if plays_with_duration:
+                total_ms = sum(play.track.duration_ms for play in plays_with_duration)
+                total_minutes = total_ms // 60000
+            
+            return {
+                'total_plays': total_plays,
+                'unique_tracks': unique_tracks,
+                'unique_artists': unique_artists,
+                'total_minutes': total_minutes
+            }
+    
     def get_unique_artist_count(self, year: Optional[int] = None) -> int:
         """Get count of unique artists played in a year"""
         with self.db.session_scope() as session:
@@ -377,3 +416,42 @@ class AnalyticsService:
                 )
             
             return query.count()
+    
+    def get_stats_for_period(self, start_date: Optional[datetime] = None, 
+                           end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """Get comprehensive stats for a flexible time period"""
+        with self.db.session_scope() as session:
+            # Build base query
+            query = session.query(PlayHistory)
+            
+            if start_date:
+                query = query.filter(PlayHistory.played_at >= start_date)
+            if end_date:
+                query = query.filter(PlayHistory.played_at < end_date)
+            
+            # Total plays
+            total_plays = query.count()
+            
+            # Get unique tracks
+            track_query = query.distinct(PlayHistory.track_id)
+            unique_tracks = track_query.count()
+            
+            # Get unique artists
+            artist_query = query.join(Track).distinct(Track.artist_id)
+            unique_artists = artist_query.count()
+            
+            # Calculate total minutes (assuming avg 3 minutes per track)
+            total_minutes = total_plays * 3
+            
+            # Try to get more accurate duration if available
+            plays_with_duration = query.join(Track).filter(Track.duration_ms.isnot(None)).all()
+            if plays_with_duration:
+                total_ms = sum(play.track.duration_ms for play in plays_with_duration)
+                total_minutes = total_ms // 60000
+            
+            return {
+                'total_plays': total_plays,
+                'unique_tracks': unique_tracks,
+                'unique_artists': unique_artists,
+                'total_minutes': total_minutes
+            }

@@ -252,7 +252,8 @@ class DatabaseManager:
                        limit: int = 30) -> List[Tuple[Artist, int]]:
         """Get top artists by play count"""
         query = session.query(Artist, func.count(PlayHistory.id).label('play_count'))\
-            .join(PlayHistory)\
+            .select_from(PlayHistory)\
+            .join(Artist, PlayHistory.artist_id == Artist.id)\
             .group_by(Artist.id)
         
         if days:
