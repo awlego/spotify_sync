@@ -51,6 +51,11 @@ def register_routes(app):
         """Interactive exploration view"""
         return render_template('explore.html')
     
+    @app.route('/genre-galaxy')
+    def genre_galaxy():
+        """Genre Galaxy 3D visualization"""
+        return render_template('genre_galaxy.html')
+    
     # Analytics API endpoints
     @app.route('/api/wrapped/<int:year>')
     def get_wrapped_data(year):
@@ -411,4 +416,39 @@ def register_routes(app):
                     
         except Exception as e:
             logger.error(f"Error creating timeline: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # New advanced visualizations
+    @app.route('/api/visualizations/genre-galaxy')
+    def get_genre_galaxy():
+        """Get 3D genre galaxy data"""
+        try:
+            from analytics.genre_mapper import GenreMapper
+            
+            mapper = GenreMapper()
+            user_id = request.args.get('user_id', type=int)
+            
+            galaxy_data = mapper.get_genre_positions(user_id)
+            return jsonify(galaxy_data)
+            
+        except Exception as e:
+            logger.error(f"Error creating genre galaxy: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/visualizations/genre-journey')
+    def get_genre_journey():
+        """Get user's journey through genres"""
+        try:
+            from analytics.genre_mapper import GenreMapper
+            
+            mapper = GenreMapper()
+            user_id = request.args.get('user_id', type=int)
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            journey = mapper.get_user_journey(user_id, start_date, end_date)
+            return jsonify({'journey': journey})
+            
+        except Exception as e:
+            logger.error(f"Error getting genre journey: {e}")
             return jsonify({'error': str(e)}), 500
