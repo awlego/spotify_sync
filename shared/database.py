@@ -201,14 +201,21 @@ class DatabaseManager:
         return status
     
     def update_sync_status(self, session: Session, source: str, status: str, 
-                          error_message: Optional[str] = None, tracks_synced: int = 0):
+                          error_message: Optional[str] = None, tracks_synced: int = 0,
+                          most_recent_play_time: Optional[datetime] = None):
         """Update sync status"""
         sync_status = self.get_sync_status(session, source)
         sync_status.status = status
         sync_status.last_sync = datetime.utcnow()
         
         if status == 'success':
-            sync_status.last_successful_sync = datetime.utcnow()
+            # Only update last_successful_sync if we actually synced tracks
+            # or if we have a most_recent_play_time to track
+            if tracks_synced > 0 and most_recent_play_time:
+                sync_status.last_successful_sync = most_recent_play_time
+            elif tracks_synced > 0:
+                sync_status.last_successful_sync = datetime.utcnow()
+            # If no tracks were synced, keep the existing last_successful_sync
             sync_status.error_message = None
             sync_status.tracks_synced += tracks_synced
         elif status == 'error':

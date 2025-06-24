@@ -68,8 +68,9 @@ class SyncService:
             
             # Determine how far back to sync
             if sync_status.last_successful_sync:
-                # Add a small buffer to avoid missing tracks
-                from_date = sync_status.last_successful_sync - timedelta(minutes=5)
+                # Use a 30-minute buffer to ensure we don't miss any tracks
+                # This handles cases where syncs might be delayed or the service was down
+                from_date = sync_status.last_successful_sync - timedelta(minutes=30)
             elif days_back:
                 from_date = datetime.now(timezone.utc) - timedelta(days=days_back)
             else:
@@ -97,6 +98,8 @@ class SyncService:
                 progress_callback(process_msg, 'info')
             
             tracks_added = 0
+            most_recent_play_time = None
+            
             with self.db.session_scope() as session:
                 for idx, raw_track in enumerate(tracks):
                     # Parse the raw Last.fm track data
@@ -140,11 +143,15 @@ class SyncService:
                     
                     if play:
                         tracks_added += 1
+                        # Track the most recent play time
+                        if not most_recent_play_time or track_data['played_at'] > most_recent_play_time:
+                            most_recent_play_time = track_data['played_at']
                 
-                # Update sync status
+                # Update sync status with the most recent play time
                 self.db.update_sync_status(
                     session, 'lastfm', 'success', 
-                    tracks_synced=tracks_added
+                    tracks_synced=tracks_added,
+                    most_recent_play_time=most_recent_play_time
                 )
             
             return tracks_added
