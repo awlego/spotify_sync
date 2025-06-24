@@ -694,3 +694,202 @@ class EnhancedVisualizations:
         )
         fig.update_layout(**self.default_layout)
         return fig
+    
+    def create_portfolio_donut(self, portfolio_data: Dict[str, Any]) -> go.Figure:
+        """Create portfolio allocation donut chart"""
+        assets = portfolio_data.get('assets', [])
+        if not assets:
+            return self._create_empty_figure("No portfolio data available")
+        
+        # Extract data
+        genres = [a['genre'].title() for a in assets]
+        percentages = [a['percentage'] for a in assets]
+        colors = [a['color'] for a in assets]
+        
+        # Create donut chart
+        fig = go.Figure(data=[go.Pie(
+            labels=genres,
+            values=percentages,
+            hole=0.7,
+            marker=dict(colors=colors, line=dict(color='#121212', width=2)),
+            textinfo='label+percent',
+            textposition='outside',
+            hovertemplate='<b>%{label}</b><br>%{value:.1f}%<br>%{text}<extra></extra>',
+            text=[f"{a['play_count']} plays" for a in assets]
+        )])
+        
+        # Add center text with diversity score
+        diversity_score = portfolio_data.get('diversity_score', 0)
+        
+        fig.add_annotation(
+            text=f"<b>{diversity_score}</b><br>Diversity Score",
+            x=0.5, y=0.5,
+            font=dict(size=24, color=self.colors['primary']),
+            showarrow=False
+        )
+        
+        fig.update_layout(
+            title=dict(
+                text='Genre Portfolio Allocation',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            showlegend=True,
+            legend=dict(
+                orientation="v",
+                yanchor="middle",
+                y=0.5,
+                xanchor="left",
+                x=1.1
+            ),
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def create_performance_chart(self, performance_data: List[Dict[str, Any]]) -> go.Figure:
+        """Create genre performance line chart"""
+        if not performance_data:
+            return self._create_empty_figure("No performance data available")
+        
+        fig = go.Figure()
+        
+        # Get all genres
+        all_genres = set()
+        for week in performance_data:
+            for asset in week['assets']:
+                all_genres.add(asset['genre'])
+        
+        # Create traces for each genre
+        for genre in sorted(all_genres):
+            weeks = []
+            percentages = []
+            
+            for week in performance_data:
+                weeks.append(week['week'])
+                genre_data = next((a for a in week['assets'] if a['genre'] == genre), None)
+                percentages.append(genre_data['percentage'] if genre_data else 0)
+            
+            fig.add_trace(go.Scatter(
+                x=weeks,
+                y=percentages,
+                name=genre.title(),
+                mode='lines+markers',
+                line=dict(width=3, color=self._get_genre_color(genre)),
+                marker=dict(size=8),
+                hovertemplate='<b>%{fullData.name}</b><br>Week: %{x}<br>Share: %{y:.1f}%<extra></extra>'
+            ))
+        
+        fig.update_layout(
+            title=dict(
+                text='Genre Performance Over Time',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            xaxis=dict(
+                title='Week',
+                color=self.colors['text_secondary'],
+                type='date'
+            ),
+            yaxis=dict(
+                title='Portfolio Share (%)',
+                color=self.colors['text_secondary'],
+                range=[0, 100]
+            ),
+            hovermode='x unified',
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def create_risk_return_scatter(self, metrics_data: Dict[str, Any]) -> go.Figure:
+        """Create risk/return scatter plot for genres"""
+        if not metrics_data or 'portfolio' not in metrics_data:
+            return self._create_empty_figure("No metrics data available")
+        
+        # Extract data
+        assets = metrics_data['portfolio']['assets']
+        volatilities = metrics_data['risk_metrics'].get('genre_volatilities', {})
+        
+        # Calculate returns (simplified - based on growth)
+        genres = []
+        risks = []
+        returns = []
+        sizes = []
+        colors = []
+        
+        for asset in assets:
+            genre = asset['genre']
+            genres.append(genre.title())
+            risks.append(volatilities.get(genre, 5))  # Default volatility
+            returns.append(asset['percentage'])  # Use share as proxy for return
+            sizes.append(asset['play_count'])
+            colors.append(asset['color'])
+        
+        # Normalize sizes
+        max_size = max(sizes) if sizes else 1
+        normalized_sizes = [20 + (s / max_size) * 40 for s in sizes]
+        
+        fig = go.Figure()
+        
+        # Add scatter points
+        fig.add_trace(go.Scatter(
+            x=risks,
+            y=returns,
+            mode='markers+text',
+            marker=dict(
+                size=normalized_sizes,
+                color=colors,
+                line=dict(color='white', width=2)
+            ),
+            text=genres,
+            textposition='top center',
+            hovertemplate='<b>%{text}</b><br>Volatility: %{x:.1f}<br>Share: %{y:.1f}%<extra></extra>'
+        ))
+        
+        # Add quadrant lines
+        avg_risk = np.mean(risks) if risks else 0
+        avg_return = np.mean(returns) if returns else 0
+        
+        fig.add_hline(y=avg_return, line_dash="dash", line_color="#666", opacity=0.5)
+        fig.add_vline(x=avg_risk, line_dash="dash", line_color="#666", opacity=0.5)
+        
+        # Add quadrant labels
+        fig.add_annotation(
+            x=max(risks) if risks else 10, y=max(returns) if returns else 50,
+            text="High Return<br>High Risk",
+            showarrow=False,
+            font=dict(color="#666", size=12),
+            xanchor="right", yanchor="top"
+        )
+        
+        fig.update_layout(
+            title=dict(
+                text='Genre Risk vs Return Analysis',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            xaxis=dict(
+                title='Volatility (Risk)',
+                color=self.colors['text_secondary']
+            ),
+            yaxis=dict(
+                title='Portfolio Share (Return)',
+                color=self.colors['text_secondary']
+            ),
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def _get_genre_color(self, genre: str) -> str:
+        """Get color for genre (extended for diversity viz)"""
+        colors = {
+            'rock': '#FF6B6B',
+            'pop': '#4ECDC4',
+            'electronic': '#45B7D1',
+            'hip hop': '#96CEB4',
+            'jazz': '#DDA0DD',
+            'classical': '#FFD93D',
+            'folk': '#95E1D3',
+            'world': '#FF7F50',
+            'other': '#A8A8A8'
+        }
+        return colors.get(genre, colors['other'])

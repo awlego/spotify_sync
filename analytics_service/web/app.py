@@ -66,6 +66,11 @@ def register_routes(app):
         """Discovery Network Graph visualization"""
         return render_template('discovery_network.html')
     
+    @app.route('/diversity-index')
+    def diversity_index():
+        """Musical Diversity Index visualization"""
+        return render_template('diversity_index.html')
+    
     # Analytics API endpoints
     @app.route('/api/wrapped/<int:year>')
     def get_wrapped_data(year):
@@ -561,4 +566,48 @@ def register_routes(app):
                 
         except Exception as e:
             logger.error(f"Error finding discovery path: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # Musical diversity endpoints
+    @app.route('/api/visualizations/genre-portfolio')
+    def get_genre_portfolio():
+        """Get musical diversity portfolio data"""
+        try:
+            from analytics.diversity_metrics import DiversityMetrics
+            
+            metrics = DiversityMetrics()
+            user_id = request.args.get('user_id', type=int)
+            days = request.args.get('days', 30, type=int)
+            
+            portfolio_data = metrics.calculate_portfolio_metrics(user_id, days)
+            return jsonify(portfolio_data)
+            
+        except Exception as e:
+            logger.error(f"Error calculating portfolio: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/visualizations/genre-performance')
+    def get_genre_performance():
+        """Get historical genre performance data"""
+        try:
+            from analytics.diversity_metrics import DiversityMetrics
+            
+            metrics = DiversityMetrics()
+            user_id = request.args.get('user_id', type=int)
+            days = request.args.get('days', 90, type=int)
+            
+            # Get extended historical data
+            portfolio_data = metrics.calculate_portfolio_metrics(user_id, days)
+            
+            # Format for time series visualization
+            performance_data = {
+                'historical': portfolio_data['historical_performance'],
+                'current': portfolio_data['portfolio'],
+                'volatility': portfolio_data['risk_metrics']['genre_volatilities']
+            }
+            
+            return jsonify(performance_data)
+            
+        except Exception as e:
+            logger.error(f"Error getting performance data: {e}")
             return jsonify({'error': str(e)}), 500
