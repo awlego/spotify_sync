@@ -115,7 +115,7 @@
             max-height: 200px;
             overflow-y: auto;
             margin-top: 20px;
-            display: none;
+            display: block;
         }
         .log-entry {
             margin-bottom: 5px;
@@ -178,7 +178,6 @@
             entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
             
             logContent.insertBefore(entry, logContent.firstChild);
-            logViewer.style.display = 'block';
             
             // Keep only last 20 entries
             while (logContent.children.length > 20) {
@@ -313,7 +312,7 @@
                     button.disabled = false;
                     
                     const message = data.message || `Successfully updated ${type} playlist`;
-                    addLogEntry(message, 'success');
+                    addLogEntry(`✓ Finished update: ${message}`, 'success');
                     
                     // Reload status to show new track counts
                     setTimeout(() => {
@@ -335,6 +334,7 @@
         }
         
         // Load status on page load
+        addLogEntry('Dashboard loaded - monitoring sync service', 'info');
         loadStatus();
         // Refresh every 30 seconds
         setInterval(loadStatus, 30000);
