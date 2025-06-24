@@ -11,6 +11,7 @@ This project fetches your complete listening history from Last.fm and uses it to
 
 ## Features
 
+### Core Sync Features
 - ✅ Fetches listening history from Last.fm
 - ✅ Automatic syncing every 5 minutes
 - ✅ Smart playlist generation based on listening patterns
@@ -18,6 +19,13 @@ This project fetches your complete listening history from Last.fm and uses it to
 - ✅ SQLite database for local history storage
 - ✅ Resume capability for interrupted syncs
 - ✅ Comprehensive error handling and logging
+
+### Advanced Analytics (New!)
+- 🌌 **Genre Galaxy Explorer** - 3D visualization of your genre landscape
+- 🎭 **Mood Spectrum Analyzer** - Track emotional journey through music
+- 🕸️ **Discovery Network Graph** - Visualize artist discovery patterns
+- 📊 **Musical Diversity Index** - Portfolio-style genre analysis
+- 🌤️ **Weather-Music Correlation** - Discover how weather affects your listening
 
 ## Project Structure
 
@@ -29,6 +37,10 @@ spotify_sync/
 │   ├── services/           # Business logic
 │   ├── scheduler/          # Automated tasks
 │   └── web/                # Flask web application
+├── analytics_service/       # Advanced analytics dashboard
+│   ├── analytics/          # Analysis modules
+│   ├── visualizations/     # Chart generation
+│   └── web/                # Analytics web interface
 ├── scripts/                 # Utility and maintenance scripts
 ├── templates/               # HTML templates
 ├── static/                  # CSS/JS assets
@@ -57,6 +69,15 @@ See the [detailed setup guide](docs/README-automated.md) for full instructions.
    python run.py
    ```
 4. Access the web dashboard at http://localhost:5001
+
+### Running Analytics Service
+
+To access the advanced analytics dashboard:
+```bash
+cd analytics_service
+python run.py
+```
+Then visit http://localhost:5002 for the analytics dashboard.
 
 ## Data Flow
 
