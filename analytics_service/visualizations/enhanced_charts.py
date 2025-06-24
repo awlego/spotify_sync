@@ -491,3 +491,206 @@ class EnhancedVisualizations:
     def to_json(self, fig: go.Figure) -> str:
         """Convert figure to JSON for frontend"""
         return json.dumps(fig.to_dict(), cls=plotly.utils.PlotlyJSONEncoder)
+    
+    def create_mood_timeline(self, mood_data: List[Dict[str, Any]]) -> go.Figure:
+        """Create mood timeline visualization"""
+        if not mood_data:
+            return self._create_empty_figure("No mood data available")
+        
+        # Convert to DataFrame for easier processing
+        df = pd.DataFrame(mood_data)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df = df.sort_values('timestamp')
+        
+        # Create stacked area chart for mood composition
+        fig = go.Figure()
+        
+        # Group by hour and mood for smoother visualization
+        df['hour'] = df['timestamp'].dt.floor('H')
+        mood_counts = df.groupby(['hour', 'mood']).size().reset_index(name='count')
+        
+        # Pivot to get moods as columns
+        mood_pivot = mood_counts.pivot(index='hour', columns='mood', values='count').fillna(0)
+        
+        # Add traces for each mood
+        for mood in mood_pivot.columns:
+            fig.add_trace(go.Scatter(
+                x=mood_pivot.index,
+                y=mood_pivot[mood],
+                name=mood.title(),
+                mode='lines',
+                stackgroup='one',
+                fillcolor=self._get_mood_color(mood),
+                line=dict(width=0.5, color=self._get_mood_color(mood))
+            ))
+        
+        fig.update_layout(
+            title=dict(
+                text='Emotional Journey Through Music',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            xaxis=dict(
+                title='Time',
+                color=self.colors['text_secondary'],
+                rangeslider=dict(visible=True)
+            ),
+            yaxis=dict(
+                title='Mood Intensity',
+                color=self.colors['text_secondary']
+            ),
+            hovermode='x unified',
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def create_mood_wheel(self, patterns: Dict[str, Any]) -> go.Figure:
+        """Create circular mood visualization by hour"""
+        hourly = patterns.get('hourly_pattern', {})
+        if not hourly:
+            return self._create_empty_figure("No hourly mood data")
+        
+        # Prepare data for polar chart
+        hours = list(range(24))
+        moods = list(patterns.get('mood_colors', {}).keys())
+        
+        fig = go.Figure()
+        
+        for mood in moods:
+            values = [hourly.get(h, {}).get(mood, 0) for h in hours]
+            
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=[f"{h:02d}:00" for h in hours],
+                fill='toself',
+                fillcolor=self._get_mood_color(mood),
+                opacity=0.6,
+                name=mood.title(),
+                line=dict(color=self._get_mood_color(mood))
+            ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 100],
+                    ticksuffix='%',
+                    color=self.colors['text_secondary']
+                ),
+                angularaxis=dict(
+                    direction='clockwise',
+                    rotation=90,
+                    color=self.colors['text_secondary']
+                ),
+                bgcolor=self.colors['background']
+            ),
+            title=dict(
+                text='Daily Mood Patterns',
+                font=dict(size=20, color=self.colors['text_primary'])
+            ),
+            showlegend=True,
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def create_mood_heatmap(self, patterns: Dict[str, Any]) -> go.Figure:
+        """Create heatmap of moods by day and hour"""
+        daily = patterns.get('daily_pattern', {})
+        hourly = patterns.get('hourly_pattern', {})
+        
+        if not daily or not hourly:
+            return self._create_empty_figure("No pattern data available")
+        
+        # Create a matrix for the heatmap
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        hours = list(range(24))
+        
+        # For simplicity, show dominant mood per day/hour combination
+        # In a real implementation, this would use actual play data
+        matrix = []
+        mood_matrix = []
+        
+        for day in days:
+            row = []
+            mood_row = []
+            for hour in hours:
+                # Get dominant mood (simplified - would use real data)
+                dominant_mood = 'calm'  # Default
+                max_percent = 0
+                
+                if day in daily and hour in hourly:
+                    for mood in hourly[hour]:
+                        if hourly[hour][mood] > max_percent:
+                            max_percent = hourly[hour][mood]
+                            dominant_mood = mood
+                
+                row.append(max_percent)
+                mood_row.append(dominant_mood)
+            
+            matrix.append(row)
+            mood_matrix.append(mood_row)
+        
+        # Create custom colorscale
+        colorscale = [
+            [0, self.colors['background']],
+            [0.5, self.colors['primary']],
+            [1, self.colors['accent']]
+        ]
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=matrix,
+            x=[f"{h:02d}:00" for h in hours],
+            y=days,
+            colorscale=colorscale,
+            showscale=True,
+            hoverongaps=False,
+            hovertemplate='%{y}<br>%{x}<br>Intensity: %{z:.1f}%<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title=dict(
+                text='Weekly Mood Patterns',
+                font=dict(size=20, color=self.colors['text_primary'])
+            ),
+            xaxis=dict(
+                title='Hour of Day',
+                color=self.colors['text_secondary']
+            ),
+            yaxis=dict(
+                title='Day of Week',
+                color=self.colors['text_secondary']
+            ),
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def _get_mood_color(self, mood: str) -> str:
+        """Get color for mood visualization"""
+        mood_colors = {
+            'happy': '#FFD700',
+            'energetic': '#FF4500',
+            'calm': '#87CEEB',
+            'sad': '#4682B4',
+            'angry': '#DC143C',
+            'romantic': '#FF69B4',
+            'melancholic': '#9370DB',
+            'uplifting': '#32CD32'
+        }
+        return mood_colors.get(mood, self.colors['primary'])
+    
+    def _create_empty_figure(self, message: str) -> go.Figure:
+        """Create empty figure with message"""
+        fig = go.Figure()
+        fig.add_annotation(
+            text=message,
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=20, color=self.colors['text_secondary'])
+        )
+        fig.update_layout(**self.default_layout)
+        return fig

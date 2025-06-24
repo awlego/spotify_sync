@@ -56,6 +56,11 @@ def register_routes(app):
         """Genre Galaxy 3D visualization"""
         return render_template('genre_galaxy.html')
     
+    @app.route('/mood-spectrum')
+    def mood_spectrum():
+        """Mood Spectrum Analyzer visualization"""
+        return render_template('mood_spectrum.html')
+    
     # Analytics API endpoints
     @app.route('/api/wrapped/<int:year>')
     def get_wrapped_data(year):
@@ -451,4 +456,61 @@ def register_routes(app):
             
         except Exception as e:
             logger.error(f"Error getting genre journey: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # Mood analysis endpoints
+    @app.route('/api/visualizations/mood-timeline')
+    def get_mood_timeline():
+        """Get mood changes over time"""
+        try:
+            from analytics.mood_analyzer import MoodAnalyzer
+            
+            analyzer = MoodAnalyzer()
+            user_id = request.args.get('user_id', type=int)
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            if start_date:
+                start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if end_date:
+                end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            
+            timeline = analyzer.get_mood_timeline(user_id, start_date, end_date)
+            return jsonify({'timeline': timeline})
+            
+        except Exception as e:
+            logger.error(f"Error creating mood timeline: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/visualizations/mood-patterns')
+    def get_mood_patterns():
+        """Get mood patterns by time"""
+        try:
+            from analytics.mood_analyzer import MoodAnalyzer
+            
+            analyzer = MoodAnalyzer()
+            user_id = request.args.get('user_id', type=int)
+            
+            patterns = analyzer.get_mood_patterns(user_id)
+            return jsonify(patterns)
+            
+        except Exception as e:
+            logger.error(f"Error analyzing mood patterns: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/insights/mood-analysis')
+    def get_mood_analysis():
+        """Get mood summary and insights"""
+        try:
+            from analytics.mood_analyzer import MoodAnalyzer
+            
+            analyzer = MoodAnalyzer()
+            user_id = request.args.get('user_id', type=int)
+            days = request.args.get('days', 30, type=int)
+            
+            summary = analyzer.get_mood_summary(user_id, days)
+            return jsonify(summary)
+            
+        except Exception as e:
+            logger.error(f"Error analyzing mood: {e}")
             return jsonify({'error': str(e)}), 500
