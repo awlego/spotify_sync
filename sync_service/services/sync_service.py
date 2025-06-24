@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Add project root to path for shared imports
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from shared import DatabaseManager
+from shared import DatabaseManager, Track
 
 # Use absolute imports within sync_service
 from api.spotify_client import SpotifyClient
@@ -131,7 +131,18 @@ class SyncService:
                             )
                         
                         if spotify_track:
-                            track.spotify_id = spotify_track['id']
+                            # Check if this Spotify ID is already used by another track
+                            existing_track = session.query(Track).filter_by(
+                                spotify_id=spotify_track['id']
+                            ).first()
+                            
+                            if not existing_track:
+                                track.spotify_id = spotify_track['id']
+                            else:
+                                logger.debug(
+                                    f"Spotify ID {spotify_track['id']} already used by track "
+                                    f"{existing_track.id}: {existing_track.name}"
+                                )
                     
                     # Add play history
                     play = self.db.add_play(
