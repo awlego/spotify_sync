@@ -36,6 +36,9 @@ class PlaylistService:
         if 'binged_songs' in playlist_configs:
             results['binged_songs'] = self.update_binged_songs_playlist()
             
+        if 'most_recently_played' in playlist_configs:
+            results['most_recently_played'] = self.update_most_recently_played_playlist()
+            
         return results
     
     def update_playlist(self, playlist_type: str) -> Dict[str, Any]:
@@ -43,7 +46,8 @@ class PlaylistService:
         playlist_methods = {
             'most_listened': self.update_most_listened_playlist,
             'recent_favorites': self.update_recent_favorites_playlist,
-            'binged_songs': self.update_binged_songs_playlist
+            'binged_songs': self.update_binged_songs_playlist,
+            'most_recently_played': self.update_most_recently_played_playlist
         }
         
         if playlist_type not in playlist_methods:
@@ -223,6 +227,67 @@ class PlaylistService:
             logger.error(error_msg)
             return False, error_msg
     
+    def update_most_recently_played_playlist(self) -> Tuple[bool, Optional[str]]:
+        """Update the most recently played playlist"""
+        try:
+            config = self.config.playlists.get('most_recently_played')
+            if not config:
+                error_msg = "Most Recently Played playlist not configured. Please add it to your configuration."
+                logger.warning(error_msg)
+                return False, error_msg
+            
+            if not config.id or config.id == '':
+                error_msg = "Most Recently Played playlist ID is empty. Please set MOST_RECENTLY_PLAYED_ID environment variable."
+                logger.warning(error_msg)
+                return False, error_msg
+            
+            with self.db.session_scope() as session:
+                # Get playlist
+                playlist = self.db.get_or_create_playlist(
+                    session,
+                    name="Most Recently Played",
+                    spotify_id=config.id,
+                    playlist_type='most_recently_played',
+                    size=config.size
+                )
+                
+                # Get most recent plays
+                recent_plays = self.db.get_recent_plays(session, limit=config.size)
+                
+                # Extract unique tracks in order (preserving chronological order)
+                seen_track_ids = set()
+                tracks_in_order = []
+                for play in recent_plays:
+                    if play.track_id not in seen_track_ids:
+                        seen_track_ids.add(play.track_id)
+                        tracks_in_order.append(play.track)
+                
+                # Filter tracks with Spotify IDs
+                tracks_with_ids = [t for t in tracks_in_order if t.spotify_id]
+                
+                if not tracks_with_ids:
+                    error_msg = "No recently played tracks with Spotify IDs found. Please sync your Spotify library first."
+                    logger.warning(error_msg)
+                    return False, error_msg
+                
+                # Update playlist on Spotify
+                track_ids = [t.spotify_id for t in tracks_with_ids]
+                success = self.spotify.update_playlist_tracks(config.id, track_ids)
+                
+                if success:
+                    # Update database
+                    self.db.update_playlist_tracks(session, playlist, tracks_with_ids)
+                    logger.info(f"Updated most recently played playlist with {len(tracks_with_ids)} tracks")
+                    return True, None
+                else:
+                    error_msg = "Failed to update playlist on Spotify. Check your authentication."
+                    return False, error_msg
+                
+        except Exception as e:
+            error_msg = f"Failed to update most recently played playlist: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+    
     def create_playlist(self, name: str, playlist_type: str, 
                        description: str = "") -> Optional[str]:
         """Create a new playlist on Spotify"""
@@ -291,6 +356,11 @@ class PlaylistService:
                 results = self.db.get_play_counts(session, days=30)[:limit]
             elif playlist_type == 'binged_songs':
                 results = self.db.get_binged_songs(session)[:limit]
+            elif playlist_type == 'most_recently_played':
+                # For recently played, return play history with counts
+                recent_plays = self.db.get_recent_plays(session, limit=limit)
+                # Convert to expected format with play count of 1
+                results = [(play.track, 1) for play in recent_plays]
             else:
                 return []
             

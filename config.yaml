@@ -17,6 +17,9 @@ playlists:
     id: ${RECENT_FAVORITES_ID}
     size: 25
     timeframe_days: 30
+  most_recently_played:
+    id: ${MOST_RECENTLY_PLAYED_ID}
+    size: 50
 spotify:
   client_id: ${SPOTIPY_CLIENT_ID}
   client_secret: ${SPOTIPY_CLIENT_SECRET}
