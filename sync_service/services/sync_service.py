@@ -11,6 +11,7 @@ from shared import DatabaseManager
 # Use absolute imports within sync_service
 from api.spotify_client import SpotifyClient
 from api.lastfm_client import LastFMClient
+from api.spotify_search_improvements import ImprovedSpotifySearch
 from config import get_config
 
 
@@ -20,6 +21,7 @@ class SyncService:
         self.db = DatabaseManager()
         self.spotify = SpotifyClient()
         self.lastfm = LastFMClient()
+        self.search_helper = ImprovedSpotifySearch()
         
     def sync_all(self) -> Dict[str, Any]:
         """Perform a full sync from all sources"""
@@ -81,11 +83,22 @@ class SyncService:
                     
                     # Try to get Spotify ID if we don't have it
                     if not track.spotify_id and self.spotify.ensure_authenticated():
-                        spotify_track = self.spotify.search_track(
+                        # Try improved search first
+                        spotify_track = self.search_helper.search_track_flexible(
+                            self.spotify._sp,
                             track_data['track'],
                             track_data['artist'],
                             track_data['album'] if track_data['album'] else None
                         )
+                        
+                        # Fallback to original search if improved search fails
+                        if not spotify_track:
+                            spotify_track = self.spotify.search_track(
+                                track_data['track'],
+                                track_data['artist'],
+                                track_data['album'] if track_data['album'] else None
+                            )
+                        
                         if spotify_track:
                             track.spotify_id = spotify_track['id']
                     
@@ -183,7 +196,7 @@ class SyncService:
     #             )
     #         raise
     
-    def sync_spotify_ids(self, limit: int = 100) -> int:
+    def sync_spotify_ids(self, limit: int = 200) -> int:
         """Find and update missing Spotify IDs for tracks"""
         if not self.spotify.ensure_authenticated():
             return 0
@@ -200,11 +213,29 @@ class SyncService:
             
             for track in tracks:
                 try:
-                    spotify_track = self.spotify.search_track(
+                    # Try improved search first
+                    spotify_track = self.search_helper.search_track_flexible(
+                        self.spotify._sp,
                         track.name,
                         track.artist.name,
                         track.album.name if track.album else None
                     )
+                    
+                    # If no match, try finding alternative versions
+                    if not spotify_track:
+                        spotify_track = self.search_helper.find_alternative_versions(
+                            self.spotify._sp,
+                            track.name,
+                            track.artist.name
+                        )
+                    
+                    # Final fallback to original search
+                    if not spotify_track:
+                        spotify_track = self.spotify.search_track(
+                            track.name,
+                            track.artist.name,
+                            track.album.name if track.album else None
+                        )
                     
                     if spotify_track:
                         spotify_id = spotify_track['id']
