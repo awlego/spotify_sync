@@ -77,7 +77,17 @@ def register_routes(app):
         """Manually update a playlist"""
         try:
             result = app.playlist_service.update_playlist(playlist_type)
-            return jsonify({'success': True, 'result': result})
+            if result['success']:
+                # Get updated stats for this playlist
+                playlist_stats = app.playlist_service.get_playlist_stats()
+                updated_info = playlist_stats.get(playlist_type, {})
+                
+                return jsonify({
+                    'success': True,
+                    'message': result.get('message') or f"Updated {updated_info.get('name', playlist_type)} playlist with {updated_info.get('track_count', 0)} tracks"
+                })
+            else:
+                return jsonify({'success': False, 'error': result.get('message', 'Update failed')}), 400
         except Exception as e:
             logger.error(f"Playlist update failed: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500

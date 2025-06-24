@@ -76,6 +76,54 @@
             justify-content: space-between;
             align-items: center;
         }
+        .update-status {
+            font-size: 12px;
+            margin-top: 5px;
+            height: 16px;
+        }
+        .update-status.loading {
+            color: #f39c12;
+        }
+        .update-status.success {
+            color: #1db954;
+        }
+        .update-status.error {
+            color: #e74c3c;
+        }
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1db954;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .log-viewer {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+            display: none;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+        }
+        .log-entry.info { color: #58a6ff; }
+        .log-entry.success { color: #56d364; }
+        .log-entry.error { color: #f85149; }
+        .log-entry .timestamp { color: #8b949e; }
     </style>
 </head>
 <body>
@@ -110,11 +158,33 @@
             <div class="playlist-list" id="playlists">
                 Loading playlists...
             </div>
+            <div class="log-viewer" id="log-viewer">
+                <div id="log-content"></div>
+            </div>
         </div>
     </div>
     
     <script>
         let syncInProgress = false;
+        let updateStates = {};
+        
+        function addLogEntry(message, type = 'info') {
+            const logViewer = document.getElementById('log-viewer');
+            const logContent = document.getElementById('log-content');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            
+            logContent.insertBefore(entry, logContent.firstChild);
+            logViewer.style.display = 'block';
+            
+            // Keep only last 20 entries
+            while (logContent.children.length > 20) {
+                logContent.removeChild(logContent.lastChild);
+            }
+        }
         
         async function loadStatus() {
             try {
@@ -170,13 +240,17 @@
             for (const [type, info] of Object.entries(playlists)) {
                 const item = document.createElement('div');
                 item.className = 'playlist-item';
+                const isUpdating = updateStates[type] === 'updating';
                 item.innerHTML = `
                     <div>
                         <strong>${info.name}</strong><br>
                         <span class="timestamp">${info.track_count} / ${info.configured_size} tracks</span>
+                        <div class="update-status" id="status-${type}">
+                            ${isUpdating ? '<span class="spinner"></span>Updating playlist...' : ''}
+                        </div>
                     </div>
-                    <button class="button" onclick="updatePlaylist('${type}')" ${syncInProgress ? 'disabled' : ''}>
-                        Update
+                    <button class="button" id="btn-${type}" onclick="updatePlaylist('${type}')" ${isUpdating || syncInProgress ? 'disabled' : ''}>
+                        ${isUpdating ? 'Updating...' : 'Update'}
                     </button>
                 `;
                 container.appendChild(item);
@@ -215,19 +289,47 @@
         }
         
         async function updatePlaylist(type) {
-            if (syncInProgress) return;
+            if (syncInProgress || updateStates[type] === 'updating') return;
+            
+            updateStates[type] = 'updating';
+            const button = document.getElementById(`btn-${type}`);
+            const status = document.getElementById(`status-${type}`);
+            
+            button.disabled = true;
+            button.textContent = 'Updating...';
+            status.innerHTML = '<span class="spinner"></span>Updating playlist...';
+            status.className = 'update-status loading';
+            
+            addLogEntry(`Starting update for ${type} playlist...`, 'info');
             
             try {
                 const response = await fetch(`/api/playlists/update/${type}`, { method: 'POST' });
                 const data = await response.json();
                 
                 if (data.success) {
-                    loadStatus();
+                    status.innerHTML = '✓ Update complete!';
+                    status.className = 'update-status success';
+                    button.textContent = 'Update';
+                    
+                    const message = data.message || `Successfully updated ${type} playlist`;
+                    addLogEntry(message, 'success');
+                    
+                    // Reload status to show new track counts
+                    setTimeout(() => {
+                        updateStates[type] = null;
+                        loadStatus();
+                    }, 2000);
                 } else {
                     throw new Error(data.error);
                 }
             } catch (error) {
-                alert('Playlist update failed: ' + error.message);
+                status.innerHTML = '✗ Update failed';
+                status.className = 'update-status error';
+                button.textContent = 'Update';
+                button.disabled = false;
+                updateStates[type] = null;
+                
+                addLogEntry(`Failed to update ${type}: ${error.message}`, 'error');
             }
         }
         
