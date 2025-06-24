@@ -15,7 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 # Set environment variable to prevent browser opening
 os.environ['SPOTIPY_REDIRECT_URI'] = 'http://localhost:6006/callback'
 
-from shared import DatabaseManager, Track
+from shared import DatabaseManager, Track, Artist
 from api.spotify_client import SpotifyClient
 from api.spotify_search_improvements import ImprovedSpotifySearch
 from time import sleep
@@ -119,7 +119,15 @@ def bulk_update_spotify_ids():
                         ).all()
                         
                         # Update all versions
+                        updated_count = 0
                         for version in all_versions:
+                            # Double-check this specific track doesn't already have a Spotify ID
+                            # (in case it was updated between our initial query and now)
+                            session.refresh(version)
+                            if version.spotify_id:
+                                logger.debug(f"Track '{version.name}' (id: {version.id}) was already updated")
+                                continue
+                                
                             version.spotify_id = spotify_id
                             version.duration_ms = spotify_track['duration_ms']
                             version.popularity = spotify_track['popularity']
@@ -128,7 +136,6 @@ def bulk_update_spotify_ids():
                             if not version.artist.spotify_id and spotify_track['artists']:
                                 artist_spotify_id = spotify_track['artists'][0]['id']
                                 # Check if another artist already has this ID
-                                from shared import Artist
                                 existing_artist = session.query(Artist).filter(
                                     and_(
                                         Artist.spotify_id == artist_spotify_id,
@@ -138,14 +145,19 @@ def bulk_update_spotify_ids():
                                 if not existing_artist:
                                     version.artist.spotify_id = artist_spotify_id
                             
-                            batch_updates += 1
-                            total_updated += 1
+                            try:
+                                # Commit each track individually to handle constraint violations
+                                session.commit()
+                                updated_count += 1
+                                batch_updates += 1
+                                total_updated += 1
+                            except Exception as e:
+                                session.rollback()
+                                logger.warning(f"Could not update track {version.id}: {e}")
+                                continue
                         
-                        if len(all_versions) > 1:
-                            logger.info(f"Updated {len(all_versions)} versions of '{track.name}' by {track.artist.name}")
-                        
-                        # Commit after each successful update to avoid constraint errors
-                        session.commit()
+                        if updated_count > 1:
+                            logger.info(f"Updated {updated_count} versions of '{track.name}' by {track.artist.name}")
                         
                 except Exception as e:
                     logger.error(f"Error updating '{track.name}' by {track.artist.name}: {e}")
