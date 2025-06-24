@@ -42,7 +42,12 @@ def register_routes(app):
     
     @app.route('/')
     def index():
-        """Main wrapped view"""
+        """Main home page with navigation"""
+        return render_template('home.html')
+    
+    @app.route('/wrapped')
+    def wrapped():
+        """Year in review wrapped view"""
         current_year = datetime.now().year
         return render_template('wrapped.html', year=current_year)
     

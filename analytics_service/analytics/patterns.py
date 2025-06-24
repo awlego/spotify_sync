@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from shared import DatabaseManager, Track, Artist, PlayHistory
-from sqlalchemy import func
+from sqlalchemy import func, Date
 
 
 class PatternAnalyzer:
@@ -26,7 +26,7 @@ class PatternAnalyzer:
         with self.db.session_scope() as session:
             # Get all play dates
             plays = session.query(
-                PlayHistory.played_at.cast(date).label('play_date')
+                PlayHistory.played_at.cast(Date).label('play_date')
             ).distinct().order_by('play_date').all()
             
             if not plays:

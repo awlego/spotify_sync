@@ -174,9 +174,9 @@ class WeatherMusicCorrelation:
                 if len(set(w_values)) > 1 and len(set(a_values)) > 1:
                     corr, p_value = pearsonr(w_values, a_values)
                     correlations[w_feature][a_feature] = {
-                        'correlation': round(corr, 3),
-                        'p_value': round(p_value, 3),
-                        'significant': p_value < 0.05
+                        'correlation': round(float(corr), 3),
+                        'p_value': round(float(p_value), 3),
+                        'significant': bool(p_value < 0.05)
                     }
                 else:
                     correlations[w_feature][a_feature] = {
