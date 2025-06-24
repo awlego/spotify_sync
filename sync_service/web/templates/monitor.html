@@ -310,6 +310,7 @@
                     status.innerHTML = '✓ Update complete!';
                     status.className = 'update-status success';
                     button.textContent = 'Update';
+                    button.disabled = false;
                     
                     const message = data.message || `Successfully updated ${type} playlist`;
                     addLogEntry(message, 'success');
