@@ -611,3 +611,87 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error getting performance data: {e}")
             return jsonify({'error': str(e)}), 500
+    
+    # Weather correlation endpoints
+    @app.route('/weather-correlation')
+    def weather_correlation():
+        """Weather-Music Correlation visualization page"""
+        return render_template('weather_correlation.html')
+    
+    @app.route('/api/visualizations/weather-correlation')
+    def get_weather_correlation():
+        """Get weather-music correlation data"""
+        try:
+            from analytics.weather_correlation import WeatherMusicCorrelation
+            
+            analyzer = WeatherMusicCorrelation()
+            user_id = request.args.get('user_id', type=int)
+            days = request.args.get('days', 90, type=int)
+            lat = request.args.get('lat', type=float)
+            lon = request.args.get('lon', type=float)
+            
+            # Get location if not provided
+            location = (lat, lon) if lat and lon else None
+            
+            correlation_data = analyzer.analyze_weather_correlations(
+                user_id=user_id,
+                days=days,
+                location=location
+            )
+            
+            return jsonify(correlation_data)
+            
+        except Exception as e:
+            logger.error(f"Error analyzing weather correlation: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/visualizations/weather-patterns')
+    def get_weather_patterns():
+        """Get weather-based music patterns"""
+        try:
+            from analytics.weather_correlation import WeatherMusicCorrelation
+            
+            analyzer = WeatherMusicCorrelation()
+            user_id = request.args.get('user_id', type=int)
+            days = request.args.get('days', 90, type=int)
+            
+            correlation_data = analyzer.analyze_weather_correlations(user_id, days)
+            
+            # Return just the patterns for visualization
+            return jsonify({
+                'patterns': correlation_data['patterns'],
+                'summary': correlation_data['weather_summary']
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting weather patterns: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/weather/current-predictions')
+    def get_current_predictions():
+        """Get music predictions based on current weather"""
+        try:
+            from analytics.weather_correlation import WeatherMusicCorrelation
+            
+            analyzer = WeatherMusicCorrelation()
+            user_id = request.args.get('user_id', type=int)
+            lat = request.args.get('lat', type=float)
+            lon = request.args.get('lon', type=float)
+            
+            location = (lat, lon) if lat and lon else None
+            
+            # Get full analysis
+            data = analyzer.analyze_weather_correlations(user_id, location=location)
+            
+            return jsonify({
+                'predictions': data['predictions'],
+                'current_weather': {
+                    'category': data['predictions']['weather'],
+                    'temperature': data['predictions']['temperature'],
+                    'description': data['predictions']['description']
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting predictions: {e}")
+            return jsonify({'error': str(e)}), 500

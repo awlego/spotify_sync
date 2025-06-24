@@ -893,3 +893,359 @@ class EnhancedVisualizations:
             'other': '#A8A8A8'
         }
         return colors.get(genre, colors['other'])
+    
+    def create_weather_correlation_matrix(self, correlations: Dict[str, Any]) -> go.Figure:
+        """Create correlation matrix heatmap for weather vs audio features"""
+        if not correlations or 'error' in correlations:
+            return self._create_empty_figure("Insufficient data for correlation analysis")
+        
+        # Extract data for matrix
+        weather_features = list(correlations.keys())
+        audio_features = list(correlations[weather_features[0]].keys()) if weather_features else []
+        
+        # Build correlation matrix
+        z_values = []
+        annotations = []
+        
+        for i, w_feature in enumerate(weather_features):
+            row = []
+            for j, a_feature in enumerate(audio_features):
+                corr_data = correlations[w_feature][a_feature]
+                corr_value = corr_data['correlation']
+                row.append(corr_value)
+                
+                # Add annotation for significant correlations
+                if abs(corr_value) > 0.3:
+                    annotations.append(dict(
+                        x=j, y=i,
+                        text=f"{corr_value:.2f}",
+                        showarrow=False,
+                        font=dict(color='white' if abs(corr_value) > 0.5 else '#b3b3b3')
+                    ))
+            z_values.append(row)
+        
+        # Create heatmap
+        fig = go.Figure(data=go.Heatmap(
+            z=z_values,
+            x=[f.title() for f in audio_features],
+            y=[f.title() for f in weather_features],
+            colorscale=[
+                [0, '#4575b4'],
+                [0.25, '#91bfdb'],
+                [0.5, '#f7f7f7'],
+                [0.75, '#fc8d59'],
+                [1, '#d73027']
+            ],
+            zmid=0,
+            colorbar=dict(
+                title="Correlation",
+                titleside="right",
+                tickmode="linear",
+                tick0=-1,
+                dtick=0.5
+            ),
+            hovertemplate='%{y} vs %{x}<br>Correlation: %{z:.3f}<extra></extra>'
+        ))
+        
+        # Add annotations
+        fig.update_layout(
+            annotations=annotations,
+            title=dict(
+                text='Weather-Music Feature Correlations',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            xaxis=dict(
+                title='Audio Features',
+                side='bottom',
+                color=self.colors['text_secondary']
+            ),
+            yaxis=dict(
+                title='Weather Features',
+                color=self.colors['text_secondary']
+            ),
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def create_weather_patterns_chart(self, patterns: Dict[str, Any]) -> go.Figure:
+        """Create visualization showing music preferences by weather type"""
+        if not patterns:
+            return self._create_empty_figure("No weather pattern data available")
+        
+        # Create subplots for different visualizations
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Audio Features by Weather', 'Top Moods by Weather',
+                           'Genre Distribution', 'Play Activity'),
+            specs=[[{'type': 'bar'}, {'type': 'bar'}],
+                   [{'type': 'pie'}, {'type': 'scatter'}]]
+        )
+        
+        weather_types = list(patterns.keys())
+        colors_map = {
+            'clear': '#FFD700',
+            'cloudy': '#778899',
+            'rainy': '#4682B4',
+            'stormy': '#483D8B',
+            'snowy': '#F0F8FF',
+            'misty': '#C0C0C0'
+        }
+        
+        # 1. Audio features by weather
+        features = ['valence', 'energy', 'danceability']
+        for i, feature in enumerate(features):
+            values = [patterns[w]['avg_features'].get(feature, 0) for w in weather_types]
+            
+            fig.add_trace(
+                go.Bar(
+                    name=feature.title(),
+                    x=weather_types,
+                    y=values,
+                    marker_color=self.colors['chart_colors'][i],
+                    showlegend=(i == 0)
+                ),
+                row=1, col=1
+            )
+        
+        # 2. Top moods by weather (stacked bar)
+        mood_data = {}
+        for weather in weather_types:
+            if patterns[weather]['top_moods']:
+                for mood, count in patterns[weather]['top_moods'][:3]:
+                    if mood not in mood_data:
+                        mood_data[mood] = []
+                    mood_data[mood].append((weather, count))
+        
+        for mood, data in mood_data.items():
+            x = [d[0] for d in data]
+            y = [d[1] for d in data]
+            
+            fig.add_trace(
+                go.Bar(
+                    name=mood.title(),
+                    x=x,
+                    y=y,
+                    marker_color=self._get_mood_color(mood)
+                ),
+                row=1, col=2
+            )
+        
+        # 3. Play count distribution (pie)
+        play_counts = [patterns[w]['play_count'] for w in weather_types]
+        colors = [colors_map.get(w, '#808080') for w in weather_types]
+        
+        fig.add_trace(
+            go.Pie(
+                labels=weather_types,
+                values=play_counts,
+                marker=dict(colors=colors),
+                textinfo='label+percent',
+                hole=0.3
+            ),
+            row=2, col=1
+        )
+        
+        # 4. Activity scatter (plays vs weather frequency)
+        fig.add_trace(
+            go.Scatter(
+                x=weather_types,
+                y=play_counts,
+                mode='markers+lines',
+                marker=dict(
+                    size=[20 + (p/max(play_counts))*30 for p in play_counts],
+                    color=colors,
+                    line=dict(color='white', width=2)
+                ),
+                line=dict(color=self.colors['primary'], width=2)
+            ),
+            row=2, col=2
+        )
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text='Music Patterns by Weather Conditions',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            showlegend=True,
+            **self.default_layout
+        )
+        
+        # Update axes
+        fig.update_xaxes(title_text="Weather Type", row=1, col=1)
+        fig.update_yaxes(title_text="Average Value", row=1, col=1)
+        fig.update_xaxes(title_text="Weather Type", row=1, col=2)
+        fig.update_yaxes(title_text="Play Count", row=1, col=2)
+        fig.update_xaxes(title_text="Weather Type", row=2, col=2)
+        fig.update_yaxes(title_text="Total Plays", row=2, col=2)
+        
+        return fig
+    
+    def create_weather_map(self, location_data: Dict[str, Any]) -> go.Figure:
+        """Create map visualization with play density overlay"""
+        if not location_data:
+            return self._create_empty_figure("No location data available")
+        
+        lat = location_data['latitude']
+        lon = location_data['longitude']
+        densities = location_data['play_density']
+        
+        # Create base map
+        fig = go.Figure()
+        
+        # Add main location marker
+        fig.add_trace(go.Scattermapbox(
+            lat=[lat],
+            lon=[lon],
+            mode='markers',
+            marker=dict(
+                size=20,
+                color=self.colors['primary']
+            ),
+            text="Your Location",
+            hovertemplate="%{text}<br>Lat: %{lat}<br>Lon: %{lon}<extra></extra>"
+        ))
+        
+        # Add density markers
+        if densities:
+            lats = [lat + d['lat_offset'] for d in densities]
+            lons = [lon + d['lon_offset'] for d in densities]
+            intensities = [d['intensity'] for d in densities]
+            
+            fig.add_trace(go.Scattermapbox(
+                lat=lats,
+                lon=lons,
+                mode='markers',
+                marker=dict(
+                    size=[10 + i*20 for i in intensities],
+                    color=intensities,
+                    colorscale='Viridis',
+                    opacity=0.6,
+                    showscale=True,
+                    colorbar=dict(
+                        title="Play Intensity",
+                        x=1.02
+                    )
+                ),
+                text=[f"Intensity: {i:.1%}" for i in intensities],
+                hovertemplate="%{text}<extra></extra>"
+            ))
+        
+        fig.update_layout(
+            mapbox=dict(
+                style="carto-darkmatter",
+                center=dict(lat=lat, lon=lon),
+                zoom=10
+            ),
+            title=dict(
+                text='Listening Activity Map',
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            **self.default_layout
+        )
+        
+        return fig
+    
+    def create_weather_predictions_card(self, predictions: Dict[str, Any]) -> go.Figure:
+        """Create a card visualization for weather-based predictions"""
+        if 'error' in predictions:
+            return self._create_empty_figure(predictions['error'])
+        
+        # Create figure with custom layout
+        fig = go.Figure()
+        
+        # Weather info
+        weather = predictions['weather']
+        temp = predictions['temperature']
+        desc = predictions['description']
+        suggestions = predictions['suggestions']
+        confidence = predictions.get('confidence', 0)
+        
+        # Add weather icon representation
+        weather_colors = {
+            'clear': '#FFD700',
+            'cloudy': '#778899',
+            'rainy': '#4682B4',
+            'stormy': '#483D8B',
+            'snowy': '#F0F8FF',
+            'misty': '#C0C0C0'
+        }
+        
+        # Create annotations for the card
+        annotations = [
+            # Weather type
+            dict(
+                text=f"<b>{weather.upper()}</b>",
+                x=0.5, y=0.9,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=32, color=weather_colors.get(weather, '#ffffff'))
+            ),
+            # Temperature
+            dict(
+                text=f"{temp}°C",
+                x=0.5, y=0.8,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=24, color=self.colors['text_primary'])
+            ),
+            # Description
+            dict(
+                text=desc.title(),
+                x=0.5, y=0.7,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=16, color=self.colors['text_secondary'])
+            ),
+            # Suggestions header
+            dict(
+                text="<b>Music Recommendations:</b>",
+                x=0.1, y=0.55,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=18, color=self.colors['primary']),
+                xanchor="left"
+            )
+        ]
+        
+        # Add suggestions
+        y_pos = 0.45
+        for suggestion in suggestions[:5]:  # Limit to 5 suggestions
+            annotations.append(dict(
+                text=f"• {suggestion}",
+                x=0.1, y=y_pos,
+                xref="paper", yref="paper",
+                showarrow=False,
+                font=dict(size=14, color=self.colors['text_primary']),
+                xanchor="left"
+            ))
+            y_pos -= 0.08
+        
+        # Add confidence indicator
+        annotations.append(dict(
+            text=f"Confidence: {confidence:.0%}",
+            x=0.9, y=0.1,
+            xref="paper", yref="paper",
+            showarrow=False,
+            font=dict(size=12, color=self.colors['text_secondary']),
+            xanchor="right"
+        ))
+        
+        # Create empty plot
+        fig.add_trace(go.Scatter(
+            x=[0, 1], y=[0, 1],
+            mode='markers',
+            marker=dict(size=0),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+        
+        fig.update_layout(
+            annotations=annotations,
+            xaxis=dict(visible=False, range=[0, 1]),
+            yaxis=dict(visible=False, range=[0, 1]),
+            **self.default_layout
+        )
+        
+        return fig
