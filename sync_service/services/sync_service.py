@@ -241,9 +241,12 @@ class SyncService:
                         spotify_id = spotify_track['id']
                         
                         # Check if another track already has this Spotify ID
+                        from sqlalchemy import and_
                         existing = session.query(Track).filter(
-                            Track.spotify_id == spotify_id,
-                            Track.id != track.id
+                            and_(
+                                Track.spotify_id == spotify_id,
+                                Track.id != track.id
+                            )
                         ).first()
                         
                         if existing:

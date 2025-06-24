@@ -75,4 +75,4 @@ Last.fm API → SQLite Database → Spotify Playlists
 
 ## Legacy Jupyter Notebook
 
-The original Jupyter notebook implementation has been archived in the `notebooks/` directory. The automated system in `spotify_sync_automated/` is the recommended approach.
+The original Jupyter notebook implementation has been archived in the `notebooks/` directory.
