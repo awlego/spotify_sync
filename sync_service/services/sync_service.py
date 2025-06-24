@@ -68,7 +68,10 @@ class SyncService:
             # Process and store tracks
             tracks_added = 0
             with self.db.session_scope() as session:
-                for track_data in tracks:
+                for raw_track in tracks:
+                    # Parse the raw Last.fm track data
+                    track_data = self.lastfm.parse_track(raw_track)
+                    
                     track = self.db.get_or_create_track(
                         session,
                         name=track_data['track'],
@@ -81,7 +84,7 @@ class SyncService:
                         spotify_track = self.spotify.search_track(
                             track_data['track'],
                             track_data['artist'],
-                            track_data['album']
+                            track_data['album'] if track_data['album'] else None
                         )
                         if spotify_track:
                             track.spotify_id = spotify_track['id']
