@@ -61,6 +61,11 @@ def register_routes(app):
         """Mood Spectrum Analyzer visualization"""
         return render_template('mood_spectrum.html')
     
+    @app.route('/discovery-network')
+    def discovery_network():
+        """Discovery Network Graph visualization"""
+        return render_template('discovery_network.html')
+    
     # Analytics API endpoints
     @app.route('/api/wrapped/<int:year>')
     def get_wrapped_data(year):
@@ -513,4 +518,47 @@ def register_routes(app):
             
         except Exception as e:
             logger.error(f"Error analyzing mood: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # Discovery network endpoints
+    @app.route('/api/visualizations/discovery-network')
+    def get_discovery_network():
+        """Get artist discovery network data"""
+        try:
+            from analytics.discovery_tracker import DiscoveryTracker
+            
+            tracker = DiscoveryTracker()
+            user_id = request.args.get('user_id', type=int)
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            
+            if start_date:
+                start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            if end_date:
+                end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            
+            network = tracker.build_discovery_network(user_id, start_date, end_date)
+            return jsonify(network)
+            
+        except Exception as e:
+            logger.error(f"Error building discovery network: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/visualizations/discovery-path/<artist1>/<artist2>')
+    def get_discovery_path(artist1, artist2):
+        """Get discovery path between two artists"""
+        try:
+            from analytics.discovery_tracker import DiscoveryTracker
+            
+            tracker = DiscoveryTracker()
+            user_id = request.args.get('user_id', type=int)
+            
+            path = tracker.get_artist_discovery_path(artist1, artist2, user_id)
+            if path:
+                return jsonify({'path': path})
+            else:
+                return jsonify({'error': 'No path found between artists'}), 404
+                
+        except Exception as e:
+            logger.error(f"Error finding discovery path: {e}")
             return jsonify({'error': str(e)}), 500
