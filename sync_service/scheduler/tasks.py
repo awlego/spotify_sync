@@ -52,18 +52,47 @@ class TaskScheduler:
     def sync_listening_history(self):
         """Task to sync listening history from all sources"""
         logger.info("Starting listening history sync")
+        
+        # Store progress messages for web UI
+        progress_messages = []
+        
+        def progress_callback(message, level='info'):
+            """Collect progress messages and store them in app context"""
+            entry = {
+                'message': message,
+                'level': level,
+                'timestamp': datetime.now().isoformat(),
+                'source': 'automatic'
+            }
+            progress_messages.append(entry)
+            
+            # Store in app context if available
+            if self.app:
+                if not hasattr(self.app, 'recent_sync_progress'):
+                    self.app.recent_sync_progress = []
+                self.app.recent_sync_progress.append(entry)
+                # Keep only last 50 messages
+                self.app.recent_sync_progress = self.app.recent_sync_progress[-50:]
+        
         try:
-            results = self.sync_service.sync_all()
+            progress_callback("Automatic sync started", 'info')
+            results = self.sync_service.sync_all(progress_callback=progress_callback)
             
             # Log results
             for source, result in results.items():
                 if result['success']:
-                    logger.info(f"{source} sync successful: {result['tracks_synced']} new tracks")
+                    msg = f"{source} sync successful: {result['tracks_synced']} new tracks"
+                    logger.info(msg)
+                    progress_callback(msg, 'success')
                 else:
-                    logger.error(f"{source} sync failed: {result['error']}")
+                    msg = f"{source} sync failed: {result['error']}"
+                    logger.error(msg)
+                    progress_callback(msg, 'error')
                     
         except Exception as e:
-            logger.error(f"Sync task failed: {e}")
+            error_msg = f"Sync task failed: {e}"
+            logger.error(error_msg)
+            progress_callback(error_msg, 'error')
             raise
             
     def update_playlists(self):

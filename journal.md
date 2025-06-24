@@ -86,3 +86,30 @@
 - Import structure could be improved with proper __init__.py files
 - Need to clean up old src/ directory after confirming services work
 - Tests need to be split between services
+
+## 2025-06-24 - Added Sync Progress Visibility
+
+### Completed Tasks
+1. **Enhanced Sync Progress Tracking**
+   - Modified `sync_service.py` to accept progress callbacks
+   - Updated `lastfm_client.py` to report page-by-page progress
+   - Added progress message collection during sync operations
+   
+2. **Web Dashboard Improvements**
+   - Modified `/api/sync/trigger` endpoint to return detailed progress messages
+   - Updated JavaScript to display progress in activity log
+   - Added automatic sync progress tracking via scheduler
+   - Created `/api/sync/progress` endpoint for fetching automatic sync updates
+   - Activity log now shows:
+     - Manual sync start/progress/completion
+     - Automatic sync progress (with [Auto] prefix)
+     - Page-by-page Last.fm fetching progress
+     - Track processing counts
+     - Error messages with details
+
+### Implementation Details
+- Progress callbacks pass message and level (info/success/error)
+- Automatic sync progress stored in app context (last 50 messages)
+- Web UI polls for automatic sync updates every 5 seconds
+- Manual sync shows progress in real-time
+- All messages timestamped and color-coded by type

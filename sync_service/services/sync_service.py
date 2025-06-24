@@ -23,26 +23,45 @@ class SyncService:
         self.lastfm = LastFMClient()
         self.search_helper = ImprovedSpotifySearch()
         
-    def sync_all(self) -> Dict[str, Any]:
-        """Perform a full sync from all sources"""
+    def sync_all(self, progress_callback=None) -> Dict[str, Any]:
+        """Perform a full sync from all sources
+        
+        Args:
+            progress_callback: Optional function to call with progress updates
+        """
         results = {
             'lastfm': {'success': False, 'tracks_synced': 0, 'error': None}
         }
         
         # Sync from Last.fm only - Spotify should not be used as a listening history source
         try:
-            lastfm_count = self.sync_lastfm()
+            if progress_callback:
+                progress_callback('Starting Last.fm sync...', 'info')
+            
+            lastfm_count = self.sync_lastfm(progress_callback=progress_callback)
             results['lastfm']['success'] = True
             results['lastfm']['tracks_synced'] = lastfm_count
-            logger.info(f"Last.fm sync completed: {lastfm_count} tracks")
+            
+            message = f"Last.fm sync completed: {lastfm_count} tracks"
+            logger.info(message)
+            if progress_callback:
+                progress_callback(message, 'success')
         except Exception as e:
             results['lastfm']['error'] = str(e)
-            logger.error(f"Last.fm sync failed: {e}")
+            error_msg = f"Last.fm sync failed: {e}"
+            logger.error(error_msg)
+            if progress_callback:
+                progress_callback(error_msg, 'error')
         
         return results
     
-    def sync_lastfm(self, days_back: Optional[int] = None) -> int:
-        """Sync tracks from Last.fm"""
+    def sync_lastfm(self, days_back: Optional[int] = None, progress_callback=None) -> int:
+        """Sync tracks from Last.fm
+        
+        Args:
+            days_back: Optional number of days to sync back
+            progress_callback: Optional function to call with progress updates
+        """
         with self.db.session_scope() as session:
             # Get last sync time
             sync_status = self.db.get_sync_status(session, 'lastfm')
@@ -62,15 +81,24 @@ class SyncService:
         
         try:
             # Fetch tracks from Last.fm
-            logger.info(f"Fetching Last.fm tracks since {from_date}")
+            fetch_msg = f"Fetching Last.fm tracks since {from_date.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            logger.info(fetch_msg)
+            if progress_callback:
+                progress_callback(fetch_msg, 'info')
+            
             # Convert datetime to timestamp for Last.fm API
             from_timestamp = int(from_date.timestamp())
-            tracks = self.lastfm.get_all_recent_tracks(from_timestamp=from_timestamp)
+            tracks = self.lastfm.get_all_recent_tracks(from_timestamp=from_timestamp, progress_callback=progress_callback)
             
             # Process and store tracks
+            process_msg = f"Processing {len(tracks)} tracks from Last.fm..."
+            logger.info(process_msg)
+            if progress_callback:
+                progress_callback(process_msg, 'info')
+            
             tracks_added = 0
             with self.db.session_scope() as session:
-                for raw_track in tracks:
+                for idx, raw_track in enumerate(tracks):
                     # Parse the raw Last.fm track data
                     track_data = self.lastfm.parse_track(raw_track)
                     

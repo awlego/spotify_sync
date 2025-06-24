@@ -264,11 +264,24 @@
             button.disabled = true;
             button.textContent = 'Syncing...';
             
+            addLogEntry('Manual sync triggered', 'info');
+            
             try {
                 const response = await fetch('/api/sync/trigger', { method: 'POST' });
                 const data = await response.json();
                 
+                // Display progress messages
+                if (data.progress && data.progress.length > 0) {
+                    data.progress.forEach(entry => {
+                        addLogEntry(entry.message, entry.level);
+                    });
+                }
+                
                 if (data.success) {
+                    const result = data.result.lastfm;
+                    const finalMessage = `Sync complete: ${result.tracks_synced} tracks synced`;
+                    addLogEntry(finalMessage, 'success');
+                    
                     button.textContent = 'Sync Complete!';
                     setTimeout(() => {
                         button.textContent = 'Trigger Sync';
@@ -280,7 +293,7 @@
                     throw new Error(data.error);
                 }
             } catch (error) {
-                alert('Sync failed: ' + error.message);
+                addLogEntry('Sync failed: ' + error.message, 'error');
                 button.textContent = 'Trigger Sync';
                 button.disabled = false;
                 syncInProgress = false;
@@ -333,11 +346,40 @@
             }
         }
         
+        // Function to check for automatic sync progress
+        let lastProgressCheck = new Date().toISOString();
+        
+        async function checkSyncProgress() {
+            try {
+                const response = await fetch('/api/sync/progress');
+                const data = await response.json();
+                
+                if (data.progress && data.progress.length > 0) {
+                    // Filter to only show new messages
+                    const newMessages = data.progress.filter(entry => 
+                        entry.timestamp > lastProgressCheck && entry.source === 'automatic'
+                    );
+                    
+                    newMessages.forEach(entry => {
+                        addLogEntry(`[Auto] ${entry.message}`, entry.level);
+                    });
+                    
+                    if (newMessages.length > 0) {
+                        lastProgressCheck = newMessages[newMessages.length - 1].timestamp;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to check sync progress:', error);
+            }
+        }
+        
         // Load status on page load
         addLogEntry('Dashboard loaded - monitoring sync service', 'info');
         loadStatus();
-        // Refresh every 30 seconds
+        // Refresh status every 30 seconds
         setInterval(loadStatus, 30000);
+        // Check for automatic sync progress every 5 seconds
+        setInterval(checkSyncProgress, 5000);
         
         // Check for auth result
         const urlParams = new URLSearchParams(window.location.search);

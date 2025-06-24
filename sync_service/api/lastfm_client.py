@@ -157,13 +157,15 @@ class LastFMClient:
     
     def get_all_recent_tracks(self, from_timestamp: Optional[int] = None,
                              to_timestamp: Optional[int] = None, 
-                             max_pages: int = 10) -> List[Dict[str, Any]]:
+                             max_pages: int = 10,
+                             progress_callback=None) -> List[Dict[str, Any]]:
         """Get all recent tracks, handling pagination
         
         Args:
             from_timestamp: Unix timestamp to fetch tracks after
             to_timestamp: Unix timestamp to fetch tracks before
             max_pages: Maximum number of pages to fetch
+            progress_callback: Optional function to call with progress updates
             
         Returns:
             List of all track dictionaries
@@ -172,7 +174,11 @@ class LastFMClient:
         page = 1
         
         while page <= max_pages:
-            logger.info(f"Fetching Last.fm page {page}")
+            msg = f"Fetching Last.fm page {page}"
+            logger.info(msg)
+            if progress_callback:
+                progress_callback(msg, 'info')
+                
             tracks, info = self.get_recent_tracks_with_info(
                 page=page, 
                 from_timestamp=from_timestamp,
@@ -184,13 +190,22 @@ class LastFMClient:
             
             all_tracks.extend(tracks)
             
+            # Report progress with total pages info
+            if progress_callback and info.get('totalPages'):
+                progress_msg = f"Fetched page {page}/{info['totalPages']} ({len(all_tracks)} tracks so far)"
+                progress_callback(progress_msg, 'info')
+            
             # Check if we've reached the last page
             if page >= info.get('totalPages', 1):
                 break
                 
             page += 1
         
-        logger.info(f"Fetched {len(all_tracks)} tracks from Last.fm")
+        final_msg = f"Fetched {len(all_tracks)} tracks from Last.fm"
+        logger.info(final_msg)
+        if progress_callback:
+            progress_callback(final_msg, 'info')
+            
         return all_tracks
     
     def parse_track(self, track_data: Dict[str, Any]) -> Dict[str, Any]:

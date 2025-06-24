@@ -4,6 +4,7 @@ Minimal Flask app for sync service monitoring
 from flask import Flask, render_template, jsonify
 from flask_cors import CORS
 from loguru import logger
+from datetime import datetime
 import os
 import sys
 
@@ -30,6 +31,9 @@ def create_app():
     app.playlist_service = PlaylistService()
     app.spotify_client = SpotifyClient()
     app.scheduler = TaskScheduler(app)
+    
+    # Initialize sync progress storage
+    app.recent_sync_progress = []
     
     # Register routes
     register_routes(app)
@@ -65,12 +69,35 @@ def register_routes(app):
     @app.route('/api/sync/trigger', methods=['POST'])
     def trigger_sync():
         """Manually trigger sync"""
+        progress_messages = []
+        
+        def progress_callback(message, level='info'):
+            """Collect progress messages"""
+            progress_messages.append({
+                'message': message,
+                'level': level,
+                'timestamp': datetime.now().isoformat()
+            })
+            
         try:
-            result = app.sync_service.sync_all()
-            return jsonify({'success': True, 'result': result})
+            result = app.sync_service.sync_all(progress_callback=progress_callback)
+            return jsonify({
+                'success': True, 
+                'result': result,
+                'progress': progress_messages
+            })
         except Exception as e:
             logger.error(f"Manual sync failed: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+            progress_messages.append({
+                'message': f"Sync failed: {str(e)}",
+                'level': 'error',
+                'timestamp': datetime.now().isoformat()
+            })
+            return jsonify({
+                'success': False, 
+                'error': str(e),
+                'progress': progress_messages
+            }), 500
     
     @app.route('/api/playlists/update/<playlist_type>', methods=['POST'])
     def update_playlist(playlist_type):
@@ -109,3 +136,11 @@ def register_routes(app):
             if success:
                 return redirect(url_for('index', auth='success'))
         return redirect(url_for('index', auth='failed'))
+    
+    @app.route('/api/sync/progress', methods=['GET'])
+    def get_sync_progress():
+        """Get recent sync progress messages"""
+        # This endpoint returns the recent progress messages stored in app context
+        return jsonify({
+            'progress': getattr(app, 'recent_sync_progress', [])
+        })
