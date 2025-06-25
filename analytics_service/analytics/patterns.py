@@ -235,3 +235,106 @@ class PatternAnalyzer:
             'unique_artists': len(artists),
             'dominant_artist': Counter([p.track.artist.name for p in plays]).most_common(1)[0] if plays else None
         }
+    
+    def get_peak_month_by_artist(self, artist_name: str) -> Dict[str, Any]:
+        """Find the peak listening month for a specific artist"""
+        with self.db.session_scope() as session:
+            # Find the artist
+            artist = session.query(Artist).filter_by(name=artist_name).first()
+            if not artist:
+                return {'error': 'Artist not found'}
+            
+            # Get all plays for this artist grouped by month
+            plays = session.query(
+                func.strftime('%Y-%m', PlayHistory.played_at).label('month'),
+                func.count(PlayHistory.id).label('play_count')
+            ).join(Track).filter(
+                Track.artist_id == artist.id
+            ).group_by('month').order_by(
+                func.count(PlayHistory.id).desc()
+            ).all()
+            
+            if not plays:
+                return {'error': 'No plays found for artist'}
+            
+            # Get the peak month
+            peak_month_str, peak_count = plays[0]
+            year, month = map(int, peak_month_str.split('-'))
+            
+            # Get all months data for context
+            monthly_data = []
+            for month_str, count in plays:
+                y, m = map(int, month_str.split('-'))
+                monthly_data.append({
+                    'year': y,
+                    'month': m,
+                    'month_name': datetime(y, m, 1).strftime('%B %Y'),
+                    'play_count': count
+                })
+            
+            return {
+                'artist': artist_name,
+                'peak_month': {
+                    'year': year,
+                    'month': month,
+                    'month_name': datetime(year, month, 1).strftime('%B %Y'),
+                    'play_count': peak_count
+                },
+                'all_months': monthly_data[:12]  # Top 12 months
+            }
+    
+    def analyze_binge_patterns(self, min_plays_per_day: int = 3) -> Dict[str, Any]:
+        """Analyze binge listening patterns across all tracks"""
+        with self.db.session_scope() as session:
+            # Get daily play counts per track
+            daily_plays = session.query(
+                Track.id,
+                func.date(PlayHistory.played_at).label('play_date'),
+                func.count(PlayHistory.id).label('daily_count')
+            ).join(PlayHistory).group_by(
+                Track.id,
+                func.date(PlayHistory.played_at)
+            ).having(
+                func.count(PlayHistory.id) >= min_plays_per_day
+            ).all()
+            
+            if not daily_plays:
+                return {
+                    'total_binge_days': 0,
+                    'unique_binged_tracks': 0,
+                    'top_binge_days': [],
+                    'binge_patterns': {}
+                }
+            
+            # Analyze patterns
+            binge_days = defaultdict(int)
+            track_binges = defaultdict(list)
+            
+            for track_id, play_date, count in daily_plays:
+                binge_days[play_date] += 1
+                track_binges[track_id].append((play_date, count))
+            
+            # Find days with most binged tracks
+            top_binge_days = sorted(binge_days.items(), key=lambda x: x[1], reverse=True)[:10]
+            
+            # Calculate binge frequency patterns
+            binge_frequencies = Counter()
+            for track_id, binges in track_binges.items():
+                frequency = len(binges)
+                binge_frequencies[frequency] += 1
+            
+            return {
+                'total_binge_days': len(binge_days),
+                'unique_binged_tracks': len(track_binges),
+                'top_binge_days': [
+                    {
+                        'date': day,
+                        'tracks_binged': count
+                    } for day, count in top_binge_days
+                ],
+                'binge_patterns': {
+                    'single_binge': binge_frequencies.get(1, 0),
+                    'occasional_binge': sum(v for k, v in binge_frequencies.items() if 2 <= k <= 5),
+                    'frequent_binge': sum(v for k, v in binge_frequencies.items() if k > 5)
+                }
+            }

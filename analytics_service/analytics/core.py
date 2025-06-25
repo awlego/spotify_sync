@@ -404,6 +404,153 @@ class AnalyticsService:
                 'total_minutes': total_minutes
             }
     
+    def get_songs_by_artist(self, artist_name: str, limit: int = 25) -> List[Dict[str, Any]]:
+        """Get most played songs by a specific artist"""
+        with self.db.session_scope() as session:
+            # Find the artist
+            artist = session.query(Artist).filter_by(name=artist_name).first()
+            if not artist:
+                return []
+            
+            # Get play counts for this artist's tracks
+            track_plays = session.query(
+                Track,
+                func.count(PlayHistory.id).label('play_count')
+            ).join(PlayHistory).filter(
+                Track.artist_id == artist.id
+            ).group_by(Track.id).order_by(
+                func.count(PlayHistory.id).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for track, count in track_plays:
+                results.append({
+                    'track_name': track.name,
+                    'album_name': track.album.name if track.album else '',
+                    'play_count': count,
+                    'spotify_id': track.spotify_id
+                })
+            
+            return results
+    
+    def get_binged_songs(self, limit: int = 25, min_daily_plays: int = 3) -> List[Dict[str, Any]]:
+        """Get songs that were binged (played multiple times in a single day)"""
+        with self.db.session_scope() as session:
+            # Get daily play counts per track
+            daily_plays = session.query(
+                Track,
+                func.date(PlayHistory.played_at).label('play_date'),
+                func.count(PlayHistory.id).label('daily_count')
+            ).join(PlayHistory).group_by(
+                Track.id,
+                func.date(PlayHistory.played_at)
+            ).having(
+                func.count(PlayHistory.id) >= min_daily_plays
+            ).subquery()
+            
+            # Sum up the high-play days for each track
+            binged_tracks = session.query(
+                Track,
+                func.sum(daily_plays.c.daily_count).label('total_binge_plays')
+            ).join(
+                daily_plays, Track.id == daily_plays.c.id
+            ).group_by(Track.id).order_by(
+                func.sum(daily_plays.c.daily_count).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for track, binge_count in binged_tracks:
+                results.append({
+                    'track_name': track.name,
+                    'artist_name': track.artist.name,
+                    'album_name': track.album.name if track.album else '',
+                    'total_binge_plays': int(binge_count),
+                    'spotify_id': track.spotify_id
+                })
+            
+            return results
+    
+    def get_recent_favorites(self, days: int = 30, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get most played songs in recent time period"""
+        with self.db.session_scope() as session:
+            start_date = datetime.now() - timedelta(days=days)
+            
+            track_plays = session.query(
+                Track,
+                func.count(PlayHistory.id).label('play_count')
+            ).join(PlayHistory).filter(
+                PlayHistory.played_at >= start_date
+            ).group_by(Track.id).order_by(
+                func.count(PlayHistory.id).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for track, count in track_plays:
+                results.append({
+                    'track_name': track.name,
+                    'artist_name': track.artist.name,
+                    'album_name': track.album.name if track.album else '',
+                    'play_count': count,
+                    'spotify_id': track.spotify_id
+                })
+            
+            return results
+    
+    def get_artist_listening_consistency(self, limit: int = 30) -> List[Dict[str, Any]]:
+        """Get artists with the most days of listening (consistency)"""
+        with self.db.session_scope() as session:
+            # Count distinct days per artist
+            artist_days = session.query(
+                Artist,
+                func.count(func.distinct(func.date(PlayHistory.played_at))).label('days_listened')
+            ).select_from(Artist).join(Track).join(PlayHistory).group_by(Artist.id).order_by(
+                func.count(func.distinct(func.date(PlayHistory.played_at))).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for artist, days in artist_days:
+                # Get total play count for context
+                total_plays = session.query(PlayHistory).join(Track).filter(
+                    Track.artist_id == artist.id
+                ).count()
+                
+                results.append({
+                    'artist_name': artist.name,
+                    'days_listened': days,
+                    'total_plays': total_plays,
+                    'avg_plays_per_day': round(total_plays / days, 1) if days > 0 else 0,
+                    'spotify_id': artist.spotify_id
+                })
+            
+            return results
+    
+    def get_play_counts_by_dow(self, days: Optional[int] = None) -> Dict[str, int]:
+        """Get play counts by day of week"""
+        with self.db.session_scope() as session:
+            query = session.query(PlayHistory)
+            
+            if days:
+                start_date = datetime.now() - timedelta(days=days)
+                query = query.filter(PlayHistory.played_at >= start_date)
+            
+            plays = query.all()
+            
+            # Count by day of week
+            dow_counts = defaultdict(int)
+            weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 
+                           'Friday', 'Saturday', 'Sunday']
+            
+            for play in plays:
+                weekday = weekday_names[play.played_at.weekday()]
+                dow_counts[weekday] += 1
+            
+            # Ensure all days are present
+            for day in weekday_names:
+                if day not in dow_counts:
+                    dow_counts[day] = 0
+            
+            return dict(dow_counts)
+    
     def get_unique_artist_count(self, year: Optional[int] = None) -> int:
         """Get count of unique artists played in a year"""
         with self.db.session_scope() as session:
@@ -455,3 +602,150 @@ class AnalyticsService:
                 'unique_artists': unique_artists,
                 'total_minutes': total_minutes
             }
+    
+    def get_songs_by_artist(self, artist_name: str, limit: int = 25) -> List[Dict[str, Any]]:
+        """Get most played songs by a specific artist"""
+        with self.db.session_scope() as session:
+            # Find the artist
+            artist = session.query(Artist).filter_by(name=artist_name).first()
+            if not artist:
+                return []
+            
+            # Get play counts for this artist's tracks
+            track_plays = session.query(
+                Track,
+                func.count(PlayHistory.id).label('play_count')
+            ).join(PlayHistory).filter(
+                Track.artist_id == artist.id
+            ).group_by(Track.id).order_by(
+                func.count(PlayHistory.id).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for track, count in track_plays:
+                results.append({
+                    'track_name': track.name,
+                    'album_name': track.album.name if track.album else '',
+                    'play_count': count,
+                    'spotify_id': track.spotify_id
+                })
+            
+            return results
+    
+    def get_binged_songs(self, limit: int = 25, min_daily_plays: int = 3) -> List[Dict[str, Any]]:
+        """Get songs that were binged (played multiple times in a single day)"""
+        with self.db.session_scope() as session:
+            # Get daily play counts per track
+            daily_plays = session.query(
+                Track,
+                func.date(PlayHistory.played_at).label('play_date'),
+                func.count(PlayHistory.id).label('daily_count')
+            ).join(PlayHistory).group_by(
+                Track.id,
+                func.date(PlayHistory.played_at)
+            ).having(
+                func.count(PlayHistory.id) >= min_daily_plays
+            ).subquery()
+            
+            # Sum up the high-play days for each track
+            binged_tracks = session.query(
+                Track,
+                func.sum(daily_plays.c.daily_count).label('total_binge_plays')
+            ).join(
+                daily_plays, Track.id == daily_plays.c.id
+            ).group_by(Track.id).order_by(
+                func.sum(daily_plays.c.daily_count).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for track, binge_count in binged_tracks:
+                results.append({
+                    'track_name': track.name,
+                    'artist_name': track.artist.name,
+                    'album_name': track.album.name if track.album else '',
+                    'total_binge_plays': int(binge_count),
+                    'spotify_id': track.spotify_id
+                })
+            
+            return results
+    
+    def get_recent_favorites(self, days: int = 30, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get most played songs in recent time period"""
+        with self.db.session_scope() as session:
+            start_date = datetime.now() - timedelta(days=days)
+            
+            track_plays = session.query(
+                Track,
+                func.count(PlayHistory.id).label('play_count')
+            ).join(PlayHistory).filter(
+                PlayHistory.played_at >= start_date
+            ).group_by(Track.id).order_by(
+                func.count(PlayHistory.id).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for track, count in track_plays:
+                results.append({
+                    'track_name': track.name,
+                    'artist_name': track.artist.name,
+                    'album_name': track.album.name if track.album else '',
+                    'play_count': count,
+                    'spotify_id': track.spotify_id
+                })
+            
+            return results
+    
+    def get_artist_listening_consistency(self, limit: int = 30) -> List[Dict[str, Any]]:
+        """Get artists with the most days of listening (consistency)"""
+        with self.db.session_scope() as session:
+            # Count distinct days per artist
+            artist_days = session.query(
+                Artist,
+                func.count(func.distinct(func.date(PlayHistory.played_at))).label('days_listened')
+            ).select_from(Artist).join(Track).join(PlayHistory).group_by(Artist.id).order_by(
+                func.count(func.distinct(func.date(PlayHistory.played_at))).desc()
+            ).limit(limit).all()
+            
+            results = []
+            for artist, days in artist_days:
+                # Get total play count for context
+                total_plays = session.query(PlayHistory).join(Track).filter(
+                    Track.artist_id == artist.id
+                ).count()
+                
+                results.append({
+                    'artist_name': artist.name,
+                    'days_listened': days,
+                    'total_plays': total_plays,
+                    'avg_plays_per_day': round(total_plays / days, 1) if days > 0 else 0,
+                    'spotify_id': artist.spotify_id
+                })
+            
+            return results
+    
+    def get_play_counts_by_dow(self, days: Optional[int] = None) -> Dict[str, int]:
+        """Get play counts by day of week"""
+        with self.db.session_scope() as session:
+            query = session.query(PlayHistory)
+            
+            if days:
+                start_date = datetime.now() - timedelta(days=days)
+                query = query.filter(PlayHistory.played_at >= start_date)
+            
+            plays = query.all()
+            
+            # Count by day of week
+            dow_counts = defaultdict(int)
+            weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 
+                           'Friday', 'Saturday', 'Sunday']
+            
+            for play in plays:
+                weekday = weekday_names[play.played_at.weekday()]
+                dow_counts[weekday] += 1
+            
+            # Ensure all days are present
+            for day in weekday_names:
+                if day not in dow_counts:
+                    dow_counts[day] = 0
+            
+            return dict(dow_counts)

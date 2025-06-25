@@ -700,3 +700,105 @@ def register_routes(app):
         except Exception as e:
             logger.error(f"Error getting predictions: {e}")
             return jsonify({'error': str(e)}), 500
+    
+    # New analytics endpoints from Jupyter notebook
+    @app.route('/api/analytics/artist/<artist_name>/songs')
+    def get_artist_songs(artist_name):
+        """Get most played songs by a specific artist"""
+        try:
+            limit = request.args.get('limit', 25, type=int)
+            songs = app.analytics.get_songs_by_artist(artist_name, limit=limit)
+            return jsonify({'artist': artist_name, 'songs': songs})
+        except Exception as e:
+            logger.error(f"Error getting artist songs: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/analytics/binged-songs')
+    def get_binged_songs():
+        """Get songs that were binged (played multiple times in a day)"""
+        try:
+            limit = request.args.get('limit', 25, type=int)
+            min_plays = request.args.get('min_plays', 3, type=int)
+            songs = app.analytics.get_binged_songs(limit=limit, min_daily_plays=min_plays)
+            return jsonify({'binged_songs': songs})
+        except Exception as e:
+            logger.error(f"Error getting binged songs: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/analytics/recent-favorites')
+    def get_recent_favorites():
+        """Get most played songs in recent time period"""
+        try:
+            days = request.args.get('days', 30, type=int)
+            limit = request.args.get('limit', 50, type=int)
+            songs = app.analytics.get_recent_favorites(days=days, limit=limit)
+            return jsonify({'recent_favorites': songs, 'days': days})
+        except Exception as e:
+            logger.error(f"Error getting recent favorites: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/analytics/dow-patterns')
+    def get_dow_patterns():
+        """Get play counts by day of week"""
+        try:
+            days = request.args.get('days', type=int)
+            patterns = app.analytics.get_play_counts_by_dow(days=days)
+            return jsonify({'dow_patterns': patterns})
+        except Exception as e:
+            logger.error(f"Error getting DOW patterns: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/analytics/consistent-artists')
+    def get_consistent_artists():
+        """Get artists with most days of listening"""
+        try:
+            limit = request.args.get('limit', 30, type=int)
+            artists = app.analytics.get_artist_listening_consistency(limit=limit)
+            return jsonify({'consistent_artists': artists})
+        except Exception as e:
+            logger.error(f"Error getting consistent artists: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/visualizations/artist-calendar/<artist_name>')
+    def get_artist_calendar(artist_name):
+        """Get calendar heatmap for a specific artist"""
+        try:
+            year = request.args.get('year', type=int)
+            data = app.analytics.get_listening_calendar_data(year=year, artist_filter=artist_name)
+            
+            if data.empty:
+                return jsonify({'error': 'No data for artist'}), 404
+            
+            # Use enhanced calendar visualization
+            fig = app.enhanced_viz.create_github_style_calendar(data, year or datetime.now().year)
+            return jsonify({'chart': app.enhanced_viz.to_json(fig), 'artist': artist_name})
+        except Exception as e:
+            logger.error(f"Error creating artist calendar: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/analytics/artist/<artist_name>/peak-month')
+    def get_artist_peak_month(artist_name):
+        """Get peak listening month for an artist"""
+        try:
+            result = app.patterns.get_peak_month_by_artist(artist_name)
+            return jsonify(result)
+        except Exception as e:
+            logger.error(f"Error getting artist peak month: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/analytics/binge-patterns')
+    def get_binge_patterns():
+        """Get overall binge listening patterns"""
+        try:
+            min_plays = request.args.get('min_plays', 3, type=int)
+            patterns = app.patterns.analyze_binge_patterns(min_plays_per_day=min_plays)
+            return jsonify(patterns)
+        except Exception as e:
+            logger.error(f"Error analyzing binge patterns: {e}")
+            return jsonify({'error': str(e)}), 500
+    
+    # Artist analysis page
+    @app.route('/artist-analysis')
+    def artist_analysis():
+        """Artist-specific analysis page"""
+        return render_template('artist_analysis.html')

@@ -204,6 +204,49 @@
             text-align: center;
         }
         
+        .song-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: #404040;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .song-item:hover {
+            background: #505050;
+            transform: translateX(5px);
+        }
+        
+        .song-rank {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #1DB954;
+            margin-right: 20px;
+            min-width: 40px;
+        }
+        
+        .song-info {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .song-title {
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+        
+        .song-artist {
+            color: #b3b3b3;
+            font-size: 0.9em;
+        }
+        
+        .play-count {
+            font-weight: bold;
+            color: #1DB954;
+        }
+        
         @media (max-width: 768px) {
             .viz-grid {
                 grid-template-columns: 1fr;
@@ -256,6 +299,7 @@
             </div>
             
             <button class="btn" onclick="refreshVisualizations()">Update</button>
+            <a href="/artist-analysis" class="btn" style="margin-left: 20px; text-decoration: none;">Artist Analysis</a>
         </div>
         
         <!-- Quick Stats -->
@@ -304,6 +348,14 @@
                 </div>
             </div>
             
+            <!-- Day of Week Patterns -->
+            <div class="viz-card">
+                <h2 class="viz-title">Listening by Day of Week</h2>
+                <div class="viz-container" id="dow-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
             <!-- Top Artists Stream -->
             <div class="viz-card full-width">
                 <h2 class="viz-title">Artist Listening Trends</h2>
@@ -324,6 +376,23 @@
             <div class="viz-card">
                 <h2 class="viz-title">Listening Timeline</h2>
                 <div class="viz-container" id="timeline-container">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Recent Favorites -->
+            <div class="viz-card">
+                <h2 class="viz-title">Recent Favorites (Last 30 Days)</h2>
+                <div class="viz-container" id="recent-favorites-container" style="height: auto; max-height: 600px; overflow-y: auto;">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            
+            <!-- Binged Songs -->
+            <div class="viz-card">
+                <h2 class="viz-title">Most Binged Songs</h2>
+                <p style="color: #b3b3b3; margin-bottom: 20px;">Songs played 3+ times in a single day</p>
+                <div class="viz-container" id="binged-songs-container" style="height: auto; max-height: 600px; overflow-y: auto;">
                     <div class="loading"><div class="spinner"></div></div>
                 </div>
             </div>
@@ -422,9 +491,12 @@
                     loadCalendarViz(params),
                     loadClockViz(params),
                     loadWeeklyPatterns(params),
+                    loadDayOfWeekPatterns(params),
                     loadStreamGraph(params),
                     loadSunburst(params),
-                    loadTimeline(params)
+                    loadTimeline(params),
+                    loadRecentFavorites(),
+                    loadBingedSongs()
                 ]);
                 
             } catch (error) {
@@ -560,6 +632,94 @@
             containers.forEach(container => {
                 container.innerHTML = `<div class="error">${message}</div>`;
             });
+        }
+        
+        async function loadDayOfWeekPatterns(params) {
+            try {
+                const queryString = new URLSearchParams(params).toString();
+                const response = await fetch(`/api/analytics/dow-patterns?${queryString}`);
+                const data = await response.json();
+                
+                if (data.dow_patterns) {
+                    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                    const trace = {
+                        x: days,
+                        y: days.map(day => data.dow_patterns[day] || 0),
+                        type: 'bar',
+                        marker: {
+                            color: '#1DB954'
+                        }
+                    };
+                    
+                    const layout = {
+                        title: '',
+                        xaxis: { title: '' },
+                        yaxis: { title: 'Play Count' },
+                        paper_bgcolor: '#282828',
+                        plot_bgcolor: '#282828',
+                        font: { color: '#ffffff' }
+                    };
+                    
+                    Plotly.newPlot('dow-container', [trace], layout, {
+                        responsive: true,
+                        displayModeBar: false
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading day of week patterns:', error);
+            }
+        }
+        
+        async function loadRecentFavorites() {
+            try {
+                const response = await fetch('/api/analytics/recent-favorites?days=30&limit=20');
+                const data = await response.json();
+                
+                const container = document.getElementById('recent-favorites-container');
+                
+                if (data.recent_favorites && data.recent_favorites.length > 0) {
+                    container.innerHTML = data.recent_favorites.map((song, index) => `
+                        <div class="song-item">
+                            <div class="song-rank">${index + 1}</div>
+                            <div class="song-info">
+                                <div class="song-title">${song.track_name}</div>
+                                <div class="song-artist">${song.artist_name} - ${song.album_name || 'Unknown Album'}</div>
+                            </div>
+                            <div class="play-count">${song.play_count} plays</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div style="padding: 20px; color: #b3b3b3;">No recent favorites found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading recent favorites:', error);
+            }
+        }
+        
+        async function loadBingedSongs() {
+            try {
+                const response = await fetch('/api/analytics/binged-songs?limit=20');
+                const data = await response.json();
+                
+                const container = document.getElementById('binged-songs-container');
+                
+                if (data.binged_songs && data.binged_songs.length > 0) {
+                    container.innerHTML = data.binged_songs.map((song, index) => `
+                        <div class="song-item">
+                            <div class="song-rank">${index + 1}</div>
+                            <div class="song-info">
+                                <div class="song-title">${song.track_name}</div>
+                                <div class="song-artist">${song.artist_name} - ${song.album_name || 'Unknown Album'}</div>
+                            </div>
+                            <div class="play-count">${song.total_binge_plays} plays</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div style="padding: 20px; color: #b3b3b3;">No binged songs found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading binged songs:', error);
+            }
         }
     </script>
 </body>
