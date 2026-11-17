@@ -22,7 +22,10 @@ class SpotifyClient:
             redirect_uri=self.config.redirect_uri,
             scope=self.config.scope,
             username=self.config.username,
-            cache_path="data/cache/.spotify_cache"
+            cache_path="data/cache/.spotify_cache",
+            # spotipy's OAuth default is no timeout: a token refresh on a connection that
+            # died (e.g. during Mac sleep) blocks forever and wedges the scheduler job.
+            requests_timeout=15
         )
         
         self._sp = spotipy.Spotify(auth_manager=self._auth_manager)
