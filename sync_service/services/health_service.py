@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 
 from loguru import logger
+from spotipy.exceptions import SpotifyException
+from spotipy.oauth2 import SpotifyOauthError
 from sqlalchemy import func
 
 # Add project root to path for shared imports
@@ -56,6 +58,21 @@ def find_problems(now_utc: datetime, now_local: datetime,
     return problems
 
 
+def spotify_auth_ok(spotify_client) -> bool:
+    """False only when Spotify rejects the sign-in. Network trouble (common right
+    after the Mac wakes) is not an auth problem, so it doesn't count."""
+    try:
+        spotify_client._sp.current_user()
+        return True
+    except SpotifyOauthError as e:
+        return e.error not in ('invalid_grant', 'invalid_client')
+    except SpotifyException as e:
+        return e.http_status != 401
+    except Exception as e:
+        logger.warning(f"Health check: couldn't reach Spotify ({e}); not treating as an auth problem")
+        return True
+
+
 def send_mac_notification(title: str, message: str) -> bool:
     """Show a macOS notification. Returns False (and logs) on failure."""
     try:
@@ -95,7 +112,7 @@ class HealthMonitor:
             latest_play = session.query(func.max(PlayHistory.played_at)).scalar()
 
         problems = find_problems(datetime.utcnow(), datetime.now(), last_sync, latest_play,
-                                 self.spotify.ensure_authenticated())
+                                 spotify_auth_ok(self.spotify))
         self.process(problems, datetime.now())
         return problems
 

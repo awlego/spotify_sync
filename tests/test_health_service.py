@@ -11,7 +11,11 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'sync_service'))
 
-from services.health_service import find_problems, HealthMonitor
+import requests
+from spotipy.exceptions import SpotifyException
+from spotipy.oauth2 import SpotifyOauthError
+
+from services.health_service import find_problems, spotify_auth_ok, HealthMonitor
 
 NOW_UTC = datetime(2026, 11, 17, 1, 0)
 NOW_LOCAL = datetime(2026, 11, 16, 17, 0)
@@ -41,6 +45,33 @@ class TestFindProblems(unittest.TestCase):
 
     def test_spotify_auth(self):
         self.assertIn('spotify_auth', problems(spotify_ok=False))
+
+
+class FakeSpotifyClient:
+    def __init__(self, error=None):
+        self.error = error
+        self._sp = self
+
+    def current_user(self):
+        if self.error:
+            raise self.error
+        return {'id': 'me'}
+
+
+class TestSpotifyAuthOk(unittest.TestCase):
+    def test_ok(self):
+        self.assertTrue(spotify_auth_ok(FakeSpotifyClient()))
+
+    def test_revoked_token(self):
+        err = SpotifyOauthError('revoked', error='invalid_grant', error_description='Refresh token revoked')
+        self.assertFalse(spotify_auth_ok(FakeSpotifyClient(err)))
+
+    def test_unauthorized(self):
+        self.assertFalse(spotify_auth_ok(FakeSpotifyClient(SpotifyException(401, -1, 'unauthorized'))))
+
+    def test_network_error_is_not_auth_problem(self):
+        self.assertTrue(spotify_auth_ok(FakeSpotifyClient(requests.exceptions.ConnectionError('aborted'))))
+        self.assertTrue(spotify_auth_ok(FakeSpotifyClient(SpotifyException(503, -1, 'unavailable'))))
 
 
 class TestAlerting(unittest.TestCase):
