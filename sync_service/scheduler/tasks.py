@@ -7,6 +7,7 @@ from loguru import logger
 
 from services.sync_service import SyncService
 from services.playlist_service import PlaylistService
+from services.health_service import HealthMonitor
 from config import get_config
 
 
@@ -15,14 +16,17 @@ class TaskScheduler:
         self.config = get_config()
         self.sync_service = SyncService()
         self.playlist_service = PlaylistService()
+        self.health_monitor = HealthMonitor()
         self.app = app
-        
+
         # Configure scheduler
         jobstores = {
             'default': MemoryJobStore()
         }
         executors = {
-            'default': ThreadPoolExecutor(2)
+            'default': ThreadPoolExecutor(2),
+            # Separate worker so a hung sync/playlist job can't starve the health check
+            'health': ThreadPoolExecutor(1)
         }
         job_defaults = {
             'coalesce': True,
@@ -154,6 +158,17 @@ class TaskScheduler:
             next_run_time=next_minute.replace(second=0, microsecond=0)
         )
         
+        # Schedule health check (alerts on stuck sync, stale scrobbles, expired Spotify auth)
+        self.scheduler.add_job(
+            func=self.health_monitor.check,
+            trigger='interval',
+            minutes=30,
+            id='health_check',
+            name='Health check',
+            executor='health',
+            replace_existing=True
+        )
+
         # Schedule daily maintenance
         self.scheduler.add_job(
             func=self.daily_maintenance,

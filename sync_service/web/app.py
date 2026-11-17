@@ -137,6 +137,22 @@ def register_routes(app):
                 return redirect(url_for('index', auth='success'))
         return redirect(url_for('index', auth='failed'))
     
+    @app.route('/api/health')
+    def api_health():
+        """Problems found by the last health check"""
+        monitor = app.scheduler.health_monitor
+        return jsonify({
+            'problems': monitor.problems,
+            'last_check': monitor.last_check.isoformat() if monitor.last_check else None
+        })
+
+    @app.route('/api/health/test-notification', methods=['POST'])
+    def test_notification():
+        """Send a test macOS notification from the running service"""
+        from services.health_service import send_mac_notification, NOTIFICATION_TITLE
+        ok = send_mac_notification(NOTIFICATION_TITLE, 'Test notification: alerts are working.')
+        return jsonify({'success': ok}), (200 if ok else 500)
+
     @app.route('/api/sync/progress', methods=['GET'])
     def get_sync_progress():
         """Get recent sync progress messages"""
