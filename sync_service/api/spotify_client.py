@@ -38,7 +38,9 @@ class SpotifyClient:
     def process_auth_code(self, code: str) -> bool:
         """Process authorization code from OAuth callback"""
         try:
-            self._auth_manager.get_access_token(code, as_dict=False)
+            # check_cache=False: otherwise spotipy first tries to refresh the cached token,
+            # which fails with invalid_grant when re-authing after it was revoked/expired.
+            self._auth_manager.get_access_token(code, as_dict=False, check_cache=False)
             return True
         except Exception as e:
             logger.error(f"Failed to process auth code: {e}")

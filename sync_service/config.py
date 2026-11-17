@@ -69,7 +69,7 @@ class SyncServiceConfig(SharedConfig):
         return SpotifyConfig(
             client_id=spotify.get('client_id', os.getenv('SPOTIPY_CLIENT_ID', '')),
             client_secret=spotify.get('client_secret', os.getenv('SPOTIPY_CLIENT_SECRET', '')),
-            redirect_uri=spotify.get('redirect_uri', os.getenv('SPOTIPY_REDIRECT_URI', 'http://localhost:5001/callback')),
+            redirect_uri=spotify.get('redirect_uri', os.getenv('SPOTIPY_REDIRECT_URI', 'http://127.0.0.1:5001/callback')),
             username=spotify.get('username', os.getenv('SPOTIFY_USERNAME', ''))
         )
     

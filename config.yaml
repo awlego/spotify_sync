@@ -23,7 +23,7 @@ playlists:
 spotify:
   client_id: ${SPOTIPY_CLIENT_ID}
   client_secret: ${SPOTIPY_CLIENT_SECRET}
-  redirect_uri: http://localhost:6006/callback
+  redirect_uri: http://127.0.0.1:5001/callback
   username: ${SPOTIFY_USERNAME}
 sync:
   batch_size: 50
