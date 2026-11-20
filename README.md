@@ -20,12 +20,12 @@ This project fetches your complete listening history from Last.fm and uses it to
 - ✅ Resume capability for interrupted syncs
 - ✅ Comprehensive error handling and logging
 
-### Advanced Analytics (New!)
-- 🌌 **Genre Galaxy Explorer** - 3D visualization of your genre landscape
-- 🎭 **Mood Spectrum Analyzer** - Track emotional journey through music
-- 🕸️ **Discovery Network Graph** - Visualize artist discovery patterns
-- 📊 **Musical Diversity Index** - Portfolio-style genre analysis
-- 🌤️ **Weather-Music Correlation** - Discover how weather affects your listening
+### Listening history viewer
+- 📈 **Whole-history timeline** - every week since your first play, labelled with the artist that defined each year; drag across it to scope the page to any range
+- 🏆 **Most played** - artists, songs (versions merged) and albums for any range, plus when in the week you listen and how long your sessions run
+- 🔁 **Patterns** - your heaviest single-week rotations, artists who grew on you, evergreens, artists you drifted from or came back to, and how wide your listening ran each year
+- 📅 **Years** - a calendar of every day, month-by-month favourites and the artists you found that year
+- 🎤 **Artist and song pages** - lifetime plays, first listen, when in the day you play them, and the artists you play alongside them
 
 ## Project Structure
 
@@ -37,10 +37,11 @@ spotify_sync/
 │   ├── services/           # Business logic
 │   ├── scheduler/          # Automated tasks
 │   └── web/                # Flask web application
-├── analytics_service/       # Advanced analytics dashboard
-│   ├── analytics/          # Analysis modules
-│   ├── visualizations/     # Chart generation
-│   └── web/                # Analytics web interface
+├── analytics_service/       # Listening history viewer (read-only)
+│   ├── store.py            # In-memory snapshot of the history
+│   ├── analytics.py        # Analytics over a snapshot
+│   ├── app.py              # JSON API
+│   └── static/             # Single-page web app
 ├── scripts/                 # Utility and maintenance scripts
 ├── templates/               # HTML templates
 ├── static/                  # CSS/JS assets
@@ -70,14 +71,13 @@ See the [detailed setup guide](docs/README-automated.md) for full instructions.
    ```
 4. Access the web dashboard at http://localhost:5001
 
-### Running Analytics Service
+### Running the history viewer
 
-To access the advanced analytics dashboard:
+From the project root:
 ```bash
-cd analytics_service
-python run.py
+env3.10/bin/python analytics_service/run.py
 ```
-Then visit http://localhost:5002 for the analytics dashboard.
+Then visit http://localhost:5002. The viewer opens the database read-only and picks up new plays from the sync job on its own.
 
 ## Data Flow
 

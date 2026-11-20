@@ -20,21 +20,20 @@ cd sync_service
 python run.py
 ```
 
-### 2. Wrapped Service (Analytics)
+### 2. History viewer (analytics_service)
 **Port:** 5002  
-**Purpose:** Provides Spotify Wrapped-style analytics and visualizations
+**Purpose:** Browse and analyse the whole listening history
 
 **Features:**
-- Yearly wrapped summaries with interactive UI
-- Listening personality analysis
-- Pattern detection (streaks, peak times, discoveries)
-- Beautiful visualizations
-- Shareable insights
+- Whole-history timeline with a draggable date range
+- Most played artists, songs and albums for any range
+- Patterns: heaviest rotations, long arcs, breadth of listening
+- Year pages, artist pages and song pages
+- Opens the database read-only; reloads when the sync job adds plays
 
-**Run:**
+**Run (from the project root):**
 ```bash
-cd wrapped_service
-python run.py
+env3.10/bin/python analytics_service/run.py
 ```
 
 ## Shared Components
@@ -46,7 +45,7 @@ Both services share:
 
 ## Architecture Benefits
 
-1. **Separation of Concerns**: Sync runs continuously, wrapped is on-demand
+1. **Separation of Concerns**: Sync runs continuously, the viewer is on-demand
 2. **Independent Scaling**: Each service can be updated independently
 3. **Focused Features**: Each service does one thing well
 4. **Shared Data**: Both services work with the same listening history
@@ -63,17 +62,16 @@ Both services share:
    ```bash
    python run.py
    ```
-4. **In another terminal, start wrapped service**:
+4. **In another terminal, start the history viewer** (from the project root):
    ```bash
-   cd ../wrapped_service
-   python run.py
+   env3.10/bin/python analytics_service/run.py
    ```
 5. **Access services**:
    - Sync Monitor: http://localhost:5001
-   - Wrapped Analytics: http://localhost:5002
+   - History viewer: http://localhost:5002
 
 ## Development
 
 Each service can be developed and tested independently:
 - Sync service focuses on reliability and data integrity
-- Wrapped service focuses on user experience and insights
+- The history viewer focuses on fast, honest analytics and a pleasant experience

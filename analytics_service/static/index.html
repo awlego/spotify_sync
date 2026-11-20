@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Listening history</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 26 L8 18 L12 21 L18 9 L23 15 L30 6' fill='none' stroke='%232a78d6' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/app.css">
+  <script>
+    try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="bar">
+    <a class="mark" href="#/">Listening history</a>
+    <nav aria-label="Sections">
+      <a href="#/" data-nav="overview">Overview</a>
+      <a href="#/patterns" data-nav="patterns">Patterns</a>
+      <a href="#/years" data-nav="years">Years</a>
+    </nav>
+    <div class="bar-tools">
+      <button class="search-open" type="button" aria-keyshortcuts="/">
+        <span>Search artists and songs</span><kbd>/</kbd>
+      </button>
+      <button class="theme" type="button" aria-label="Switch color theme"></button>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1"></main>
+
+  <dialog class="search" aria-label="Search">
+    <form method="dialog" class="search-form" role="search">
+      <input type="search" name="q" placeholder="Search artists and songs" autocomplete="off"
+             aria-label="Search artists and songs" aria-controls="search-results">
+    </form>
+    <div id="search-results" class="search-results" role="listbox"></div>
+    <p class="search-hint">Use ↑ ↓ to move, Enter to open, Esc to close.</p>
+  </dialog>
+
+  <div class="tip" role="status" aria-live="polite" hidden></div>
+
+  <script src="/static/vendor/d3.v7.9.0.min.js"></script>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
