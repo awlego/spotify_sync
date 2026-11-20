@@ -133,11 +133,14 @@ class Store:
         return p.iloc[lo:hi]
 
     def cached(self, key, fn):
-        if key not in self.cache:
-            if len(self.cache) > 5000:  # arbitrary brushed ranges add up; start over rather than grow forever
-                self.cache.clear()
-            self.cache[key] = fn()
-        return self.cache[key]
+        hit = self.cache.get(key)
+        if hit is not None:
+            return hit
+        if len(self.cache) > 5000:  # arbitrary brushed ranges add up; start over rather than grow forever
+            self.cache.clear()
+        value = fn()  # another thread may clear the cache meanwhile, so return our own value
+        self.cache[key] = value
+        return value
 
     def artist_ref(self, a):
         return {'id': int(self.artists.at[a, 'id']), 'name': self.artists.at[a, 'name']}
@@ -188,9 +191,11 @@ class StoreManager:
 
     def _reload(self):
         """Build the new snapshot off the request path, then swap it in atomically."""
+        con = self._connect()
         try:
-            fresh = Store(self._connect())
+            fresh = Store(con)
             self.prepare(fresh)
             self.store = fresh
         finally:
+            con.close()
             self.reloading = False

@@ -70,16 +70,20 @@ class Fixture:
         # Same artist under a different case
         for i in range(5):
             self.play('Second Song', 'jerri', t + timedelta(days=210, minutes=4 * i))
-        # Slow burn: found in 2015 (after warm-up), peaks in 2019
-        for i in range(3):
+        # Slow burn: sticks in 2015 (5+ plays, after warm-up), peaks in 2019
+        for i in range(6):
             self.play('Slow', 'Grower', datetime(2015, 9, 1, 20) + timedelta(days=i))
         for i in range(70):
             self.play('Slow', 'Grower', datetime(2019, 3, 1, 20) + timedelta(days=i))
-        # Comeback: plays in 2015, silence until 2019, then 25 more
-        for i in range(10):
-            self.play('Return', 'Boomerang', datetime(2015, 10, 1, 12) + timedelta(days=i))
+        # Comeback: 25 plays in 2015, silence until 2019, then 25 more
+        for i in range(25):
+            self.play('Return', 'Boomerang', datetime(2015, 10, 1, 12) + timedelta(days=i % 20, hours=i // 20))
         for i in range(25):
             self.play('Return', 'Boomerang', datetime(2019, 5, 1, 12) + timedelta(days=i))
+        # A stray early play, then real discovery years later: neither a comeback nor a slow burn
+        self.play('Hit', 'Late Find', datetime(2015, 11, 1, 12))
+        for i in range(80):
+            self.play('Hit', 'Late Find', datetime(2019, 6, 1, 12) + timedelta(days=i))
         # Lost love: 90 plays in 2016, nothing since
         for i in range(90):
             self.play('Gone', 'Faded', datetime(2016, 2, 1, 18) + timedelta(days=i))
@@ -153,6 +157,9 @@ class TestAnalytics(ViewerTestCase):
         back = {r['name']: r for r in arcs['comebacks']}
         self.assertEqual(back['Boomerang']['plays_since'], 25)
         self.assertGreater(back['Boomerang']['silence_years'], 3)
+        # One stray play before a gap is a late discovery, not a comeback or a slow burn
+        self.assertNotIn('Late Find', back)
+        self.assertNotIn('Late Find', [r['name'] for r in arcs['slow_burns']])
 
     def test_sessions_split_on_30_minute_gaps(self):
         ss = A.sessions(self.store, '2015-07-24', '2015-07-30')
@@ -170,8 +177,8 @@ class TestAnalytics(ViewerTestCase):
         y = A.year_review(self.store, 2019)
         self.assertFalse(y['partial'])                                # history covers all of 2019
         self.assertTrue(A.year_review(self.store, 2021)['partial'])  # history ends in June 2021
-        self.assertEqual(y['summary']['plays'], 95)
-        self.assertEqual([a['name'] for a in y['new_artists']], [])  # Grower/Boomerang were found in 2015
+        self.assertEqual(y['summary']['plays'], 175)
+        self.assertEqual([a['name'] for a in y['new_artists']], [])  # everyone played in 2019 was first heard in 2015
         self.assertIsNone(A.year_review(self.store, 2030))
 
     def test_search_is_case_insensitive(self):

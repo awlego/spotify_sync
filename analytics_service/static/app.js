@@ -9,7 +9,18 @@ const main = document.getElementById('main');
 
 /* ------------------------------------------------------------------ data */
 
+// Responses are cached per data version: when the sync job adds plays, the server's
+// /api/meta version changes and everything cached here is dropped.
 const cache = new Map();
+let dataVersion = null;
+async function syncVersion() {
+  const res = await fetch('/api/meta');
+  if (!res.ok) return;
+  const meta = await res.json();
+  if (meta.version !== dataVersion) { cache.clear(); dataVersion = meta.version; }
+  cache.set('/api/meta', meta);
+}
+
 async function api(path) {
   if (cache.has(path)) return cache.get(path);
   const res = await fetch(path);
@@ -56,6 +67,7 @@ async function route() {
   tip.hide();
   document.querySelectorAll('[data-nav]').forEach((a) => a.removeAttribute('aria-current'));
   try {
+    await syncVersion();
     let view;
     if (parts.length === 0) view = await overview(params);
     else if (parts[0] === 'patterns') view = await patterns();
@@ -258,16 +270,16 @@ async function patterns() {
     section('Long arcs', 'Plays per year for each artist, from your first year of history to now.',
       h('div', { class: 'cols cols-2' },
         h('div', {}, h('h3', {}, 'Grew on you'),
-          h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'Their biggest year came at least three years after you found them.'),
-          arcs(p.arcs.slow_burns, (r) => `First played ${yr(r.first)}, peaked ${r.peak_year}`)),
+          h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'Their biggest year came at least three years after your fifth play.'),
+          arcs(p.arcs.slow_burns, (r) => `Fifth play in ${yr(r.stuck)}, peaked ${r.peak_year}`)),
         h('div', {}, h('h3', {}, 'Evergreens'),
           h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'Ten or more plays in the most full calendar years.'),
           arcs(p.arcs.evergreens, (r) => `${r.years_active} of ${r.of_years} years`)),
         h('div', {}, h('h3', {}, 'Drifted away'),
-          h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'Big totals, but nothing in the last two years.'),
-          arcs(p.arcs.lost_loves, (r) => `${fmt(r.plays)} plays, last in ${monthYear(parseDay(r.last))}`)),
+          h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'Big totals, but three plays or fewer in the last two years.'),
+          arcs(p.arcs.lost_loves, (r) => `${fmt(r.plays)} plays, peaked ${r.peak_year}, last played ${monthYear(parseDay(r.last))}`)),
         h('div', {}, h('h3', {}, 'Came back'),
-          h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'Silent for two years or more, then played again.'),
+          h('p', { class: 'sub', style: 'margin:-6px 0 8px;font-size:13px' }, 'At least 20 plays, two or more silent years, then at least 20 more.'),
           arcs(p.arcs.comebacks, (r) => `Back in ${monthYear(parseDay(r.returned))} after ${r.silence_years} years, ${fmt(r.plays_since)} plays since`)))),
     section('How wide you listened', 'Each year on its own. Lighter columns are years the history only partly covers.',
       h('div', { class: 'cols cols-3' },
@@ -288,7 +300,15 @@ async function yearView(year) {
   const s = y.summary;
   const idx = meta.years.findIndex((r) => r.year === year);
   const prev = meta.years[idx - 1], next = meta.years[idx + 1];
-  const change = y.previous_plays ? (s.plays - y.previous_plays) / y.previous_plays : null;
+  // Only compare with a year the history fully covers, or with the same stretch of last year
+  const comparable = y.previous_plays && (!prev?.partial || y.previous_through);
+  const change = comparable ? (s.plays - y.previous_plays) / y.previous_plays : null;
+  const versus = y.previous_through ? `the same stretch of ${year - 1}` : String(year - 1);
+  const monthCells = y.months.map((mo) => h('div', {},
+    h('span', { class: 'm' }, d3.utcFormat('%B')(new Date(Date.UTC(year, mo.month - 1, 1)))),
+    h('span', { class: 'a' }, artistLink(mo.artist)),
+    h('span', { class: 's' }, songLink(mo.song))));
+  while (monthCells.length % 6) monthCells.push(h('div', { 'aria-hidden': 'true' }));
 
   const picker = figure({
     label: 'Plays per year; choose a year',
@@ -301,7 +321,7 @@ async function yearView(year) {
     },
   });
 
-  const lede = h('p', { class: 'lede' }, sentence`${strong(fmt(s.plays))} plays across ${fmt(s.artists)} artists${change !== null ? `, ${change >= 0 ? 'up' : 'down'} ${pct(Math.abs(change))} from ${year - 1}` : ''}. ${artistLink(s.top_artist)} led with ${fmt(s.top_artist.plays)} plays${y.new_artists ? `, and you found ${fmt(s.new_artists)} new artists` : ''}.${y.partial ? ' Your history only partly covers this year.' : ''}`);
+  const lede = h('p', { class: 'lede' }, sentence`${strong(fmt(s.plays))} plays across ${fmt(s.artists)} artists${change !== null ? `, ${change >= 0 ? 'up' : 'down'} ${pct(Math.abs(change))} from ${versus}` : ''}. ${artistLink(s.top_artist)} led with ${fmt(s.top_artist.plays)} plays${y.new_artists ? `, and you found ${fmt(s.new_artists)} new artists` : ''}.${y.partial ? ' Your history only partly covers this year.' : ''}`);
 
   const nodes = [
     picker,
@@ -313,10 +333,7 @@ async function yearView(year) {
         table: () => ({ head: ['Date', 'Plays'], rows: y.calendar.map((d) => [d.d, fmt(d.n)]), numeric: [1] }),
       })),
     section('Month by month', 'The artist and song you played most each month.',
-      h('div', { class: 'months' }, y.months.map((mo) => h('div', {},
-        h('span', { class: 'm' }, d3.utcFormat('%B')(new Date(Date.UTC(year, mo.month - 1, 1)))),
-        h('span', { class: 'a' }, artistLink(mo.artist)),
-        h('span', { class: 's' }, songLink(mo.song)))))),
+      h('div', { class: 'months' }, monthCells)),
     section('Most played', null,
       h('div', { class: 'cols cols-3' },
         h('div', {}, h('h3', {}, 'Artists'), rankList(artistItems(y.top_artists))),

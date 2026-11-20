@@ -10,6 +10,8 @@ import pandas as pd
 from store import fold
 
 DAY = pd.Timedelta(days=1)
+STUCK_AT = 5          # an artist has "stuck" once you've played them this many times
+COMEBACK_PLAYS = 20   # plays needed on each side of a silence to call it a comeback
 
 
 def _date(ts):
@@ -38,6 +40,7 @@ def meta(store):
     def build():
         per_year = store.plays.groupby('year').size()
         return {
+            'version': f'{store.signature[0]}-{store.signature[1]}',  # changes whenever plays change
             'first': _date(store.first), 'last': _date(store.last),
             'plays': int(len(store.plays)), 'artists': int(len(store.artists)), 'songs': int(len(store.songs)),
             'years': [{'year': int(y), 'plays': int(per_year.get(y, 0)), 'partial': _partial(store, y)}
@@ -180,15 +183,22 @@ def artist_arcs(store, limit=12):
             return {**store.artist_ref(int(a)), 'plays': int(total[a]),
                     'by_year': [int(yearly.at[a, y]) for y in years], **extra}
 
-        # Slow burns: discovered after warm-up, peak year came 3+ years later
-        cand = total[total >= 60].index
-        cand = [a for a in cand if first[a] >= store.warmup_end]
+        # Every play of every artist in order, with its position and the silence before it
+        p = store.plays[['a', 'ts']].sort_values(['a', 'ts'], kind='stable')
+        p = p.assign(gap=p.groupby('a')['ts'].diff(), pos=p.groupby('a').cumcount())
+
+        # Slow burns: dated from the 5th play (a stray early play isn't "finding" an artist),
+        # which came after warm-up, with the peak year 3+ years later
+        stuck = p[p['pos'] == STUCK_AT - 1].set_index('a')['ts']
         slow = []
-        for a in cand:
+        for a in total[total >= 60].index:
+            if a not in stuck.index or stuck[a] < store.warmup_end:
+                continue
             peak = int(yearly.loc[a].idxmax())
-            gap = peak - first[a].year
+            gap = peak - stuck[a].year
             if gap >= 3:
-                slow.append((gap * yearly.at[a, peak], row(a, first=_date(first[a]), peak_year=peak, years_to_peak=gap)))
+                slow.append((gap * yearly.at[a, peak], row(a, first=_date(first[a]), stuck=_date(stuck[a]),
+                                                           peak_year=peak, years_to_peak=gap)))
         slow = [r for _, r in sorted(slow, key=lambda t: -t[0])[:limit]]
 
         # Evergreens: played meaningfully (10+ plays) in the most full calendar years
@@ -197,19 +207,19 @@ def artist_arcs(store, limit=12):
         ever = sorted(ever, key=lambda a: (-steady[a], -total[a]))[:limit]
         evergreens = [row(a, years_active=int(steady[a]), of_years=len(full_years)) for a in ever]
 
-        # Lost loves: big totals, nothing in the last two years
+        # Lost loves: big totals, but at most a few stray (shuffle) plays in the last two years
         cutoff = store.last - pd.Timedelta(days=730)
-        lost = total[(total >= 80) & (last < cutoff)].sort_values(ascending=False).head(limit)
-        lost_loves = [row(a, last=_date(last[a])) for a in lost.index]
+        recent = store.plays.loc[store.plays['ts'] >= cutoff].groupby('a').size().reindex(total.index, fill_value=0)
+        lost = total[(total >= 80) & (recent <= 3)].sort_values(ascending=False).head(limit)
+        lost_loves = [row(a, last=_date(last[a]), peak_year=int(yearly.loc[a].idxmax()), recent=int(recent[a]))
+                      for a in lost.index]
 
-        # Comebacks: a silence of 2+ years, then 20+ plays after returning
-        p = store.plays[['a', 'ts']].sort_values(['a', 'ts'], kind='stable')
-        p = p.assign(gap=p.groupby('a')['ts'].diff(), pos=p.groupby('a').cumcount())
-        big = p[p['gap'] > pd.Timedelta(days=730)]
+        # Comebacks: 20+ plays, a silence of 2+ years, then 20+ plays after returning
+        big = p[(p['gap'] > pd.Timedelta(days=730)) & (p['pos'] >= COMEBACK_PLAYS)]
         back = []
         for r in big.sort_values('gap', ascending=False).drop_duplicates('a').itertuples():
             after = int(total[r.a] - r.pos)
-            if after >= 20:
+            if after >= COMEBACK_PLAYS:
                 back.append(row(r.a, silence_years=round(r.gap / pd.Timedelta(days=365.25), 1),
                                 returned=_date(r.ts), plays_since=after))
         back = sorted(back, key=lambda r: -r['plays_since'])[:limit]
@@ -351,11 +361,17 @@ def year_review(store, year):
             ts = g.groupby('s').size().sort_values(ascending=False)
             months.append({'month': int(m), 'plays': int(len(g)), 'artist': store.artist_ref(int(t.index[0])),
                            'song': store.song_ref(int(ts.index[0]))})
+        # Compare like with like: if history stops partway through this year, compare the same stretch of last year
         prev = store.plays[store.plays['year'] == year - 1]
+        same_stretch = year == store.last.year and len(prev) > 0
+        if same_stretch:
+            cutoff = store.last - pd.DateOffset(years=1)
+            prev = prev[prev['ts'] <= cutoff]
         return {
             'year': year, 'partial': _partial(store, year),
             'summary': summary(store, start, end),
             'previous_plays': int(len(prev)) if len(prev) else None,
+            'previous_through': _date(store.last - pd.DateOffset(years=1)) if same_stretch else None,
             'top_artists': top(store, 'artists', start, end, 10),
             'top_songs': top(store, 'songs', start, end, 10),
             'top_albums': top(store, 'albums', start, end, 5),
