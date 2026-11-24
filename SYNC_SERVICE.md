@@ -44,7 +44,7 @@ launchctl load ~/Library/LaunchAgents/com.spotify-sync.plist
 
 ### Run manually (for testing)
 ```bash
-bash sync_service/run_with_env.sh
+"sync_service/Spotify Sync"
 ```
 
 ## Web Interface

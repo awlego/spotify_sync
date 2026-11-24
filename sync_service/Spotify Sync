@@ -1,8 +1,10 @@
 #!/bin/bash
+# Runs the sync service for the launchd agent in com.spotify-sync.plist. It is named
+# Spotify Sync because macOS lists a background item by its program's name.
 
 # Load environment variables from .env file
 export $(grep -v '^#' /Users/awlego/Repositories/spotify_sync/.env | xargs)
 
 # Activate virtual environment and run the sync service
 source /Users/awlego/Repositories/spotify_sync/env3.10/bin/activate
-python /Users/awlego/Repositories/spotify_sync/sync_service/run.py
+exec python /Users/awlego/Repositories/spotify_sync/sync_service/run.py
